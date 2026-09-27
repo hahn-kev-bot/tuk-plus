@@ -14,14 +14,8 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
+// Pure Kotlin price rules of the Tuk web app (docs/pricing.md). No Android.
 dependencies {
-    api(project(":core:network"))
     api(project(":core:domain"))
-    api(project(":core:pricing"))
     testImplementation(libs.kotlin.test)
-    testImplementation(libs.kotlinx.coroutines.test)
-}
-
-tasks.test {
-    systemProperty("fixturesDir", rootProject.file("core/model/src/test/resources/fixtures/live").absolutePath)
 }
