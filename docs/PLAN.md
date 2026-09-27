@@ -4,6 +4,9 @@ Tuk+ is a native Android client for the Tuk food ordering service
 (https://tukapp.co). It uses the same backend as the web app. We found out how
 that backend works by reading the web app. See [api-reference.md](api-reference.md).
 
+Tuk gave permission to build this app. Tuk does not supply test shops or push
+notifications. The project owner tests orders manually with real orders.
+
 ## 1. Goals
 
 1. Browse shops and menus fast, also on a slow network.
@@ -41,7 +44,8 @@ driver screens, LINE/Facebook/Apple login.
 | Images | Coil 3 with a large disk cache |
 | Background work | WorkManager |
 | Maps | osmdroid or MapLibre (the web app uses OpenStreetMap tiles) – no Google Maps key needed |
-| Tests | JUnit, Turbine, MockWebServer, Paparazzi or Roborazzi for screenshots |
+| Tests | JUnit, Turbine, MockWebServer (logic only, no network) |
+| Logs | Own file logger (JSON Lines, one file per day), see §9 |
 | Min SDK | 26 (Android 8). Target the latest SDK. |
 
 ## 4. Module layout
@@ -60,8 +64,9 @@ feature/search/           Shop and menu search
 feature/shop/             Shop header, menu, option picker
 feature/cart/             Cart and checkout
 feature/orders/           Order list, order detail, tracking, payment details
-feature/account/          Login, profile, addresses, language
-tools/api-probe/          JVM command-line tool: calls the live API and checks our models
+feature/account/          Login, profile, addresses, language, debug logs export
+core/logging/             Session log writer, redaction, export
+tools/api-probe/          JVM command-line tool, run manually: calls the live read-only API and checks our models
 ```
 
 `core/pricing` has no Android code. We can test it fast on the JVM.
@@ -106,6 +111,7 @@ the old data kept. The UI never has an empty screen when old data exists.
 | Route distance | origin + destination (rounded to ~50 m) | 7 days | Only needed for the fee. |
 | Search results | query | 10 min | Shop search also runs locally over the cached eatery list, so results show at once. |
 | Saved addresses | user | 1 day | |
+| Cart | device | never expires by time | Device only, like the web app (see 5.7). |
 | Orders (ongoing) | user | 0 (always refresh) | Polling (see 5.5). |
 | Orders (history) | user | 10 min | Paged. |
 | Images | URL | 30 days | Coil disk cache, 250 MB. |
@@ -129,11 +135,14 @@ the old data kept. The UI never has an empty screen when old data exists.
 - Order detail screen open: poll `commerce/transaction?id=` every 15 s while the
   order is ongoing. Stop when it ends.
 - App in foreground: poll the ongoing list every 60 s.
-- App in background with an ongoing order: WorkManager every 15 min (the minimum),
-  plus an optional ongoing notification with a short foreground poll. Show a
-  notification when the state changes.
-- If Tuk later registers our app in their Firebase project, use FCM to start a
-  refresh at once.
+- There are no push notifications (Tuk does not give us FCM access). All
+  updates come from polling.
+- App in background with an ongoing order: a foreground service with an
+  ongoing notification ("Order MUR123 – being prepared") polls every 30 s. It
+  stops when the order ends, or after 3 hours. The user can turn it off. Then
+  WorkManager polls every 15 min (the Android minimum).
+- Show a notification when the order state changes, and when the driver's
+  payment details become available.
 
 ### 5.6 Slow and failing requests
 
@@ -145,6 +154,29 @@ the old data kept. The UI never has an empty screen when old data exists.
 - Map plain-text 500 bodies to user messages. Keep the raw text in debug logs.
 - Parse the large eatery list on a background thread, with streaming JSON.
 - Show skeleton screens, not spinners, when there is no cache.
+
+### 5.7 Cart
+
+The web app keeps the cart **only on the device**. It is part of the app state
+in `localStorage`. The server gets no cart until the order is placed. (The web
+app sends cart events such as `add_to_basket` to `POST logs` as telemetry only.
+We do not send these.)
+
+Web app rules that we copy:
+
+- One cart at a time, for one shop.
+- If the user adds an item from a different shop: when the cart is more than
+  60 minutes old, replace it; else ask "Start a new cart?".
+- An item with options is always its own cart line. Items without options merge.
+
+Our additions:
+
+- Store the cart in Room, so it survives app restarts.
+- Store a copy of the item and option data (name, price) in the cart line, with
+  the menu version. When the menu refreshes, check each line again: removed item,
+  out of stock, price changed, option group changed. Show the changes to the user
+  before checkout.
+- Keep one cart per shop (optional, later). The web app keeps only one.
 
 ## 6. Screens
 
@@ -188,46 +220,111 @@ Each phase ends with a build that works.
 
 | Phase | Content | Done when |
 |---|---|---|
-| 0. Foundations | Gradle project, modules, CI (build, lint, unit tests). `tools/api-probe` that calls the live read-only endpoints and checks our models. Record JSON fixtures. | The probe parses all Chiang Mai eateries and 25+ menus without errors. |
+| 0. Foundations | Gradle project, modules, CI (build, lint, unit tests). Session logger (§9). `tools/api-probe` that calls the live read-only endpoints and checks our models. Record JSON fixtures. | The probe parses all Chiang Mai eateries and 25+ menus without errors. Logs export works. |
 | 1. Browse (no login) | Home, Eat list, Search, Shop menu. Room cache, `Cached<T>`, age chip, prefetch. | Cold start shows Home in < 1 s from cache. Shop opens at once from cache. |
 | 2. Cart and pricing | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in Room. | Unit tests match the web app results for every recorded menu (see §9). |
 | 3. Account | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
-| 4. Checkout | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. | A test order is placed with a shop that agreed to help (§10). |
-| 5. Orders and payment | Order list, detail, polling, notifications on state change, driver map, payment details panel, cancel. | We follow a real order from placed to delivered. |
+| 4. Checkout | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. | The owner places a real order. The shop sees correct items and totals. |
+| 5. Orders and payment | Order list, detail, polling, foreground tracking notification, driver map, payment details panel, cancel. | The owner follows a real order from placed to delivered and pays with the details shown. |
 | 6. Polish | Thai translation, accessibility, dark theme, offline mode, error reporting, release build, Play Store listing. | Beta testers use it for a week. |
 
-## 9. Testing
+## 9. Logging
 
-- **Pricing parity:** run the web app's own price code in a headless browser
-  (Playwright) against the recorded menus and baskets. Save the results as
-  fixtures. The Kotlin tests must give the same numbers.
-- **Contract tests:** `tools/api-probe` runs every day in CI against the live
-  read-only endpoints. It fails when a field changes type or goes missing, or when
-  `GET version` changes. This gives early warning of backend changes.
-- **UI tests:** screenshot tests for main screens in light, dark, en and th.
-- **Slow-network tests:** MockWebServer with 1–3 s delays and failures, to check
-  that cached data stays on screen and the age chip is correct.
-- **Order flow:** only with a real, agreed test order (§10). We do not send test
-  orders to shops without permission.
+The owner tests the app with real orders. When there is a bug, the owner exports
+the logs and gives them to the developer. So the logs must have enough detail
+to find the bug without the device.
 
-## 10. Risks and open questions
+### 9.1 Files
+
+- One file per **day**: `files/logs/2026-09-27.jsonl`. A new **session** starts
+  at each app process start. Each session has an id, and each line has the
+  session id. So one file holds all sessions of one day, and a tool can split
+  them.
+- Format: JSON Lines. One event per line:
+  `{"t":"2026-09-27T08:31:48.017+07:00","s":"a1b2c3","lvl":"I","tag":"net","ev":"http","…":…}`
+- The first line of each session: app version, build type, git commit, Android
+  version, device model, locale, time zone, region, network type, device uuid
+  (hashed), logged in or not, backend `version` string.
+- Keep 14 days. Maximum 10 MB per day. When a file is full, keep writing to a
+  second file (`2026-09-27.2.jsonl`).
+- Write on a single background thread with a buffer. Flush at once on warnings,
+  errors and when the app goes to the background.
+- An uncaught-exception handler writes the crash with its stack trace before the
+  app stops. On the next start, the app shows "The app crashed. Share logs?".
+
+### 9.2 What to log
+
+| Area | Events |
+|---|---|
+| Network | Every request: method, path, query, status, duration, response size, retry count. On errors and parse failures: the first 4 KB of the body. |
+| Write calls | `POST transactions`, `PATCH transactions/*`, login, addresses: the **full** request body and the full response. |
+| Cache | Hit or miss, age of the data, refresh start, refresh result. |
+| Pricing | Input (cart lines, options, workflow settings, fleet pricing, distance) and every output number. With this we can repeat a price calculation in a unit test. |
+| Orders | Every state change seen by polling, with time. Polling start and stop. Idempotency checks. |
+| UI | Screen opened, main actions (add to cart, checkout, place order, cancel), validation errors shown to the user. |
+| App | Start, foreground, background, workers, foreground service start and stop, permissions. |
+
+### 9.3 Privacy
+
+- Never log the `Authorization` header.
+- Replace the user id and device uuid with a short hash. The same value always
+  gives the same hash, so we can still follow one user in the logs.
+- Mask phone numbers (`+66 8x xxx 5678`) and email addresses.
+- Addresses and coordinates stay in the logs, because fee bugs need them. The
+  logs stay on the device until the owner shares them.
+- Payment account numbers: log only the last 4 digits.
+
+### 9.4 Export
+
+- Settings → Debug → "Share logs". The user selects today, one day, or the last
+  7 days. The app makes a zip and opens the Android share sheet.
+- Also "Share this session" for a quick report.
+- The zip contains a `README.txt` with the app version and the device summary.
+- A long press on the cache age chip opens a small log view for the current screen.
+- A small script (`tools/logview`) splits a file by session and prints a
+  timeline, for use when debugging.
+
+## 10. Testing
+
+All automatic tests are **logic only**. They do not use the network.
+
+- **Unit tests:** pricing, option rules, open hours (with the `Asia/Bangkok` time
+  zone and fixed clocks), tag parsing, cache policy, order state mapping,
+  log redaction.
+- **Parsing tests:** use JSON fixtures that we record from the live read-only
+  API. They include odd cases: `null` lists, plain-text errors, prices as
+  strings, empty `pic`.
+- **Pricing parity:** a manual tool runs the web app's own price code in a
+  headless browser on the recorded menus and baskets and saves the results as
+  fixtures. The Kotlin unit tests must give the same numbers.
+- **Repository tests:** MockWebServer with delays and failures, to check that
+  cached data stays on screen and the cache age is correct.
+- **Live API probe (manual only):** `./gradlew :tools:api-probe:run`, or a GitHub
+  Actions job with a manual trigger (`workflow_dispatch`). It calls only
+  read-only GET endpoints. It checks that our models still parse, and it records
+  new fixtures. It prints the backend `version` string.
+- **Write APIs:** tested only by the owner with real orders. We use the logs (§9)
+  to find problems.
+- **Bug fixes from logs:** for each bug, turn the logged input into a unit test
+  first, then fix the code.
+
+## 11. Risks and open questions
 
 | Risk / question | Plan |
 |---|---|
-| The API is not public. Tuk can change it or block us. | Ask Tuk for permission and, if possible, a contact. Contract tests warn us of changes. |
+| The API is not public. Tuk can change it. | Tuk gave permission. Run the manual API probe before each release and when the backend `version` changes. The app logs the backend version at each session start. |
 | Wrong totals or fees in an order. | Exact copy of the web formulas, parity tests, and show the same breakdown the web app shows. Compare with `delivery/price_check` in debug builds. |
 | Double orders on a slow network. | `short_id` idempotency check (§5.6). |
-| No push notifications without Tuk's help. | Polling first. Ask Tuk to add our package to their Firebase project. |
+| No push notifications. | Polling, with a foreground service while an order is ongoing (§5.5). |
 | Weak auth: the user id is the only secret. | Encrypted storage. No logging. No sharing. |
-| Test orders affect real shops. | Find one shop that agrees to help, or ask Tuk for a test shop (`workflow.data.test` exists). |
+| No test shops. Test orders are real orders. | Only the owner places orders. Debug builds show the exact order JSON and ask for a second confirmation before sending. |
 | Packages other than `r_x_y` (`p_`, `f_`, `thai`) are not fully traced. | Read that code before phase 2 ends. Until then, show a "order on the website" link for those shops. |
 | Route distance: the web app uses GraphHopper with its own key. | Use Tuk's `GET directions` first (same result source), then straight line × 1.25. |
 
 Questions for the project owner:
 
-1. Can we ask Tuk for permission, a test shop, and FCM access?
-2. Languages for release 1: English and Thai only, or also Japanese, Chinese,
+1. Languages for release 1: English and Thai only, or also Japanese, Chinese,
    Burmese and Khmer (the web app has all six)?
-3. Regions: only Chiang Mai at first?
-4. Is the payment-slip upload in scope?
-5. App name and package id (for example `co.tukplus.app`)?
+2. Regions: only Chiang Mai at first?
+3. Is the payment-slip upload in scope?
+4. App name and package id (for example `co.tukplus.app`)?

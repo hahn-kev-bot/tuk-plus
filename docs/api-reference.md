@@ -367,6 +367,16 @@ Other rules:
 - Orders of ฿1000 or more use `delivery.type = "delayed"` with `delay_duration = 26`.
 - There is no service fee ("Platform Fee ฿0").
 
+## 7a. Cart
+
+There is no cart API. The web app keeps the cart only in the browser, as
+`state.basket` in the saved Vuex state (`localStorage.store`):
+`{shop_id, created_at, notes, items:[{item, quantity}]}`. The server sees the
+cart only when the order is placed (§8). The web app also sends cart events
+(`add_to_basket`, `checkout_basket`, `set_order_notes`, …) to `POST logs` as
+telemetry. The admin endpoint `analytics/active_baskets_count` probably counts
+these events.
+
 ## 8. Placing an order
 
 `POST transactions` (Vuex `createTransaction`, 5 s debounce).
@@ -460,7 +470,7 @@ when `delivery.state == "enroute"` and moves the marker by estimate between poll
 
 Push: the web app uses Firebase project `tuk-push-notifications` (sender id
 `808714537831`). An Android app can get FCM messages from that project only if
-Tuk registers our package name in it. Without that, we must poll.
+Tuk registers our package name in it. Tuk will not do this, so the app polls.
 
 ## 10. Payment details (display only)
 
