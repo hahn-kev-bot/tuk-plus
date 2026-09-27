@@ -1,4 +1,4 @@
-# Tuk+
+# Tuk plus
 
 A native Android client for the [Tuk](https://tukapp.co) food ordering service.
 

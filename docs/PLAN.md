@@ -1,6 +1,6 @@
-# Tuk+ Android app – plan
+# Tuk plus – Android app plan
 
-Tuk+ is a native Android client for the Tuk food ordering service
+Tuk plus is a native Android client for the Tuk food ordering service
 (https://tukapp.co). It uses the same backend as the web app. We found out how
 that backend works by reading the web app. See [api-reference.md](api-reference.md).
 
@@ -14,8 +14,18 @@ notifications. The project owner tests orders manually with real orders.
 3. Track orders and show payment details. Payment itself happens outside the app.
 4. Always show how old the data on the screen is.
 
-Not in scope (first release): rides, marts, card payment (Stripe), shop and
-driver screens, LINE/Facebook/Apple login.
+Release 1 decisions:
+
+- App name: **Tuk plus**.
+- Language: **English only**. All UI text goes in string resources, so we can
+  add Thai later. Menu and shop text uses the `en` field if present, else the
+  default field.
+- Region: **Chiang Mai only**. The app always uses the Chiang Mai region and
+  coordinates `18.796143,98.979263` for list requests. It uses the device
+  location only for distance, sort and the delivery address. There is no region picker.
+
+Not in scope (first release): other languages, other regions, rides, marts,
+card payment (Stripe), shop and driver screens, LINE/Facebook/Apple login.
 
 ## 2. What we learned about the backend
 
@@ -102,9 +112,9 @@ the old data kept. The UI never has an empty screen when old data exists.
 
 | Data | Key | Refresh age | Notes |
 |---|---|---|---|
-| Home page blobs | region + page | 30 min | All 13 pages in parallel. Skip pages that were `null` last time, check them once a day. |
-| Eat chips | region | 6 h | |
-| Eatery list | region | 15 min | Open status is computed locally, so old data still shows correct open/closed state from hours. |
+| Home page blobs | page (region is Chiang Mai) | 30 min | All 13 pages in parallel. Skip pages that were `null` last time, check them once a day. |
+| Eat chips | – | 6 h | |
+| Eatery list | – | 15 min | Open status is computed locally, so old data still shows correct open/closed state from hours. |
 | "For you" scores | user | 6 h | |
 | Shop menu (workflow + blobs) | business id | 1 h, and when `workflow.updated_at` in the eatery list is newer | Prefetch (see 5.4). |
 | Delivery fleet pricing | commerce workflow id | 30 min | Needed for the fee at once. |
@@ -196,7 +206,7 @@ Our additions:
 8. **Order detail** – status timeline, items, totals, driver on map when
    `enroute`, **payment details panel** (see §7), cancel while `initiated`,
    call shop.
-9. **Account** – phone login (SMS code), name, phone, language (en/th),
+9. **Account** – phone login (SMS code), name, phone,
    saved addresses, logout.
 
 ## 7. Payment details panel
@@ -226,7 +236,7 @@ Each phase ends with a build that works.
 | 3. Account | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
 | 4. Checkout | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. | The owner places a real order. The shop sees correct items and totals. |
 | 5. Orders and payment | Order list, detail, polling, foreground tracking notification, driver map, payment details panel, cancel. | The owner follows a real order from placed to delivered and pays with the details shown. |
-| 6. Polish | Thai translation, accessibility, dark theme, offline mode, error reporting, release build, Play Store listing. | Beta testers use it for a week. |
+| 6. Polish | Accessibility, dark theme, offline mode, error reporting, release build, Play Store listing. | Beta testers use it for a week. |
 
 ## 9. Logging
 
@@ -323,8 +333,6 @@ All automatic tests are **logic only**. They do not use the network.
 
 Questions for the project owner:
 
-1. Languages for release 1: English and Thai only, or also Japanese, Chinese,
-   Burmese and Khmer (the web app has all six)?
-2. Regions: only Chiang Mai at first?
-3. Is the payment-slip upload in scope?
-4. App name and package id (for example `co.tukplus.app`)?
+1. Is the payment-slip upload in scope?
+2. Package id (application id)? Proposal: `app.tukplus`. It cannot change after
+   the first Play Store release.
