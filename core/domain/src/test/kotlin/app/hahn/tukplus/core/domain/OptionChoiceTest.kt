@@ -89,4 +89,34 @@ class OptionChoiceTest {
         assertTrue(OptionChoice.isMissing(exactly2, setOf("a")))
         assertFalse(OptionChoice.isMissing(exactly2, setOf("a", "b")))
     }
+
+    @Test
+    fun `web rules at add - exactly also for optional groups, up_to, quantities`() {
+        val optionalExactly = group("multiple", required = false, constraint = "exactly", n = 2)
+        assertTrue(OptionChoice.isMissing(optionalExactly, emptyMap<String, Int>())) // the web app checks it too
+        assertFalse(OptionChoice.isMissing(optionalExactly, mapOf("a" to 2))) // one option, quantity 2
+        assertTrue(OptionChoice.isMissing(group("multiple", required = false, constraint = "exactly", n = null), mapOf("a" to 1)))
+        val upTo = group("multiple", required = false, constraint = "up_to", n = 2)
+        assertFalse(OptionChoice.isMissing(upTo, mapOf("a" to 2)))
+        assertTrue(OptionChoice.isMissing(upTo, mapOf("a" to 2, "b" to 1)))
+    }
+
+    @Test
+    fun `visible groups - condition text, order, required first`() {
+        fun mg(id: String, g: OptionGroup) = app.hahn.tukplus.core.model.MenuOptionGroup(
+            id, g, app.hahn.tukplus.core.model.TukJson.encodeToJsonElement(OptionGroup.serializer(), g) as kotlinx.serialization.json.JsonObject,
+        )
+        val base = mg("base", OptionGroup(name = "Base", select = "single", items = listOf(OptionItem("r", "Rice"), OptionItem("n", "Noodles"))))
+        val soup = mg("soup", OptionGroup(name = "Soup", select = "single", required = true, condition = "noodles", items = listOf(OptionItem("c", "Clear"))))
+        val upper = mg("upper", OptionGroup(name = "Upper", select = "single", condition = "Noodles", items = listOf(OptionItem("x", "X"))))
+        val empty = mg("empty", OptionGroup(name = "Empty", select = "single"))
+        val groups = listOf(base, soup, upper, empty).associateBy { it.blobId }
+        val ids = listOf("base", "soup", "upper", "empty", "missing")
+        assertEquals(listOf("base"), OptionChoice.visibleGroups(ids, groups, emptyMap()).map { it.blobId })
+        val chosen = mapOf("base" to mapOf("n" to 1))
+        // "Noodles" with a capital letter never matches: the web app makes the option text lower case only.
+        assertEquals(listOf("soup", "base"), OptionChoice.visibleGroups(ids, groups, chosen).map { it.blobId })
+        assertEquals(listOf("soup"), OptionChoice.invalidGroups(ids, groups, chosen))
+        assertEquals(mapOf("base" to mapOf("r" to 1)), OptionChoice.dropHidden(ids, groups, mapOf("base" to mapOf("r" to 1), "soup" to mapOf("c" to 1))))
+    }
 }

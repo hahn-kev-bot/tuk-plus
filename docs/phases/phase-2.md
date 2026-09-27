@@ -1,6 +1,18 @@
 # Phase 2 – Cart and pricing
 
-Status: **not started**.
+Status: **in progress** (pricing done, cart UI and Room not done).
+
+## Progress
+
+- Done: the web price code is traced (docs/pricing.md), including all package codes
+  (`r_`, `p_`, `f_`, `thai…`; `apple`, `elderberry`, `fig`, `durian` have no rules).
+- Done: parity tool `tools/price-parity/` and fixtures `core/pricing/src/test/resources/parity/cases.json`
+  (1098 cases).
+- Done: `core:pricing` port (`Pricing.quote`, `CartPricing`). All parity cases pass.
+- Done: web option rules in `core:domain` (`exactly` on optional groups, `condition`,
+  `max_count`, free gift). Owner decisions: docs/pricing.md §21.
+- To do: item sheet with quantities per option and the new rules; cart screen with
+  `Pricing.quote`; Room; menu-change check on refresh.
 
 ## Goal
 
@@ -42,8 +54,8 @@ own price code for every recorded menu and basket.
 
 ## Parity tests
 
-A manual tool runs the web app's own price functions (from the bundles
-`shop-profile~1c39816d` and `app~50b71177`) in a headless browser on the
+A manual tool (`tools/price-parity/`) runs the web app's own price functions (copied
+as text from the bundles `shop-profile~1c39816d`, `app~50b71177` and others) in Node on the
 recorded menus and on generated baskets. It saves the results as fixtures. The
 Kotlin tests must give the same numbers. The tool is run by hand, like the API
 probe; the tests only read the fixtures.

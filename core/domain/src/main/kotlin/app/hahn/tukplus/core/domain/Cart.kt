@@ -9,7 +9,10 @@ import app.hahn.tukplus.core.model.TukJson
 import app.hahn.tukplus.core.model.parseIntLikeJavaScript
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /** JSON settings for the saved cart file. Unknown keys are ignored, so an older app can read a newer file. */
 val CartStoreJson: Json = Json {
@@ -146,7 +149,9 @@ object CartRules {
             else -> return AddResult.OtherShop(cart)
         }
         val start = base ?: Cart(businessId, menu.workflowId, shopName, createdAt = now, notes = cart?.takeIf { it.businessId == businessId }?.notes.orEmpty())
-        val quantity = addition.quantity.coerceIn(1, MAX_QUANTITY)
+        val limit = addLimit(start, addition.entry.item)
+        if (limit != null && limit <= 0) return AddResult.Added(start)
+        val quantity = addition.quantity.coerceIn(1, MAX_QUANTITY).let { if (limit != null) minOf(it, limit) else it }
         val note = addition.note.trim()
         val itemId = addition.entry.item.id
         val merge = if (addition.options.isEmpty() && note.isEmpty()) {
@@ -170,6 +175,26 @@ object CartRules {
             )
         }
         return AddResult.Added(start.copy(shopName = shopName.ifEmpty { start.shopName }, updatedAt = now, lines = lines))
+    }
+
+    /**
+     * How many more of [item] the cart can take, or null for no limit (web `ShopMenuOptions.submit`):
+     * `max_count` limits the quantity of the item in all lines, and a free gift can be in the
+     * cart once. [add] uses the limit; the item sheet should use it to limit the quantity.
+     */
+    fun addLimit(cart: Cart?, item: MenuItem): Int? {
+        val inCart = cart?.lines?.filter { it.itemId == item.id }?.sumOf { it.quantity } ?: 0
+        val limits = listOfNotNull(
+            item.maxCount?.takeIf { it != 0 }?.let { it - inCart },
+            if (isTruthy(item.freeGift)) 1 - inCart else null,
+        )
+        return limits.minOrNull()
+    }
+
+    private fun isTruthy(value: JsonElement?): Boolean = when (value) {
+        null, JsonNull -> false
+        is JsonPrimitive -> if (value.isString) value.content.isNotEmpty() else value.content !in setOf("false", "0", "0.0")
+        else -> true
     }
 
     /** A new cart with only [addition] (after the user said yes to "Start a new cart?"). */

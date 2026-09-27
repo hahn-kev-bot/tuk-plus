@@ -721,65 +721,88 @@ Counts from `fixtures/live/eateries.json`: 251 shops with a Commerce workflow
 | `durian` | 1 | 0 | 0 | – | no rules, full fare |
 | `thai…` | 0 | 0 | list | `_Y` | known to the code, not used |
 
-## 20. Needed for the Kotlin port
+## 20. Kotlin port status
+
+The port is in `core:pricing` (package `app.hahn.tukplus.core.pricing`). The parity tests
+read `core/pricing/src/test/resources/parity/cases.json` and pass for all cases.
 
 Model (`core:model`):
 
-- [ ] `WorkflowData`: add `max_remit`, `free_delivery`, `free_delivery_distance`,
+- [x] `WorkflowData`: added `max_remit`, `free_delivery`, `free_delivery_distance`,
       `free_delivery_polygon`, `free_delivery_to`, `max_distance`, `visual_discount`,
       `menu_options.propagate_discounts`, `delivery_fee_per_km`, `min_delivery_fee`,
-      `locations`, `order_options.autoconfirm`. Keep `vat`, `takeaway_discount`,
-      `dinein_discount` as `Double` (a percent can be 12.5).
-- [ ] `DeliveryOptions`: add `remit_amount`, `extra_cash`, `extra_tukpay`, `reversed`,
+      `locations`, `order_options.autoconfirm`. `takeaway_discount` and `dinein_discount`
+      are now `Double` (a percent can be 12.5).
+- [x] `DeliveryOptions`: added `remit_amount`, `extra_cash`, `extra_tukpay`, `reversed`,
       `driver_note`, `sign_name`.
-- [ ] `MenuItem`: add `by_weight`, `actual_weight`, `estimated_weight`. Keep `price`,
-      `discount` as raw text (JS `parseInt` rules). Keep `vatable` as "missing / true / false".
-- [ ] `OptionItem`: keep `price` as raw text; add `discounted_price` for the cart line.
-- [ ] `OptionGroup`: `multiple_n` can be text; keep the raw value.
-- [ ] User data: `delivery_options.remit_amount` and `extra_distance`.
+- [x] Menu items and options: the price code reads the raw JSON of the item (the cart line
+      keeps it), so `by_weight`, `actual_weight`, `vatable` and text prices keep their JS
+      meaning. No new `MenuItem` fields are needed.
+- [ ] User data: `user.data.delivery_options.remit_amount` and `extra_distance`. The price
+      input has `UserDeliveryOptions`; the app must fill it when the user model has them.
 
 Pricing (`core:pricing`):
 
-- [ ] `jsParseInt(String?)`, `jsRound(Double)`, JS `toFixed(2)`, `NaN` handling.
-- [ ] Item price, visual discount (once), option price, `propagate_discounts`.
-- [ ] Line total, `order_value`, item count, VAT with `vatable`.
-- [ ] Take-away and dine-in discount.
-- [ ] Fare: fleet choice (fallback for array/surge/peak, express for remit), index rule,
-      default model, self delivery, extra cash and tukpay, remit sum, `client`.
-- [ ] Distance: route + `extra_distance`; fallback straight line × 1.25; 50 m and max distance
-      rules; peak hours 17–18 local time.
-- [ ] Package codes: all branches of §9, including the `NaN` cases.
-- [ ] Subsidy, free delivery (dynamic, fixed with distance, polygon, `free_delivery`,
-      `-1`), `actualDeliveryFee`, `deliveryFee`, `actualDeliverySubsidy`.
-- [ ] Commission with `max_remit`, special remit (p_), special discount (f_), billing text.
-- [ ] Total and order page total.
-- [ ] Checks: `min_order` (delivery), free gift, delivery type and ฿1000 rule, cash hours,
-      `max_count`.
-- [ ] Order body amounts of §14 (omit keys that the web app does not send).
+- [x] JS helpers (`Js`): `parseInt`, `Number()`, truthiness, `Math.round`, `toFixed(2)`, NaN → null.
+- [x] Item price, visual discount (`ItemPrice.applyVisualDiscount`, once, in `CartPricing`),
+      option price, `propagate_discounts` (in `CartPricing`).
+- [x] Line total, `order_value`, item count, VAT with `vatable`, take-away and dine-in discount.
+- [x] Fare, fleet choice, distance rules, peak hours, package codes, subsidy, free delivery,
+      commission, special remit and discount, billing, checks, order body amounts.
+- [x] Cart adapter `CartPricing` (core:domain `Cart` → web basket items).
 
-Cart (`core:domain`, Room):
+Cart (`core:domain`):
 
-- [ ] Line id: `id2` for items with option groups (new line each add); merge by `item.id`
-      otherwise; the last comment wins on merge.
-- [ ] 60-minute rule (older than 60 minutes **and** other shop → new basket).
-- [ ] Option sheet rules of §15, including `condition`, `exactly` on optional groups and
-      `allow_multiple`.
-- [ ] Keep a copy of the menu item and the selected options in each line (the web order
-      sends this copy).
+- [x] 60-minute rule (older than 60 minutes **and** other shop → new cart). It was already right.
+- [x] `OptionChoice.isMissing` with quantities: `exactly` is checked also for optional groups
+      (as in the web app); `exactly` without `multiple_n` is never valid; `up_to` is checked.
+- [x] `OptionChoice.visibleGroups` / `dropHidden` / `invalidGroups`: the web `condition` rule
+      and the display order (required groups first).
+- [x] `CartRules.addLimit`: `max_count` and "one free gift". `CartRules.add` uses it.
+- [ ] Item sheet UI: use `visibleGroups`, `allowsQuantity` (+ / − per option) and `addLimit`.
 
-Tests:
+## 21. Port decisions (owner, 2026-09-27)
 
-- [ ] Read `core/pricing/src/test/resources/parity/cases.json`; one test per `kind`.
-- [ ] Compare numbers exactly (`null` for `NaN`), and strings for `billing_amount`.
+1. **No stale fare.** The native app computes a fare only for delivery. Take-away and
+   dine-in orders send `delivery_subsidy: 0` and no fare (the web app can keep an old fare,
+   §14). The parity cases have no stale fare, so no case needed a change.
+2. **Total = order page total.** `Quote.total` is the order page formula (§12): when the order
+   has `is_free_delivery: true`, there is no fee. This differs from the web checkout total only
+   in the `free_delivery: true` case of §10 (and a polygon without a subsidy). The web value
+   stays in `Quote.web.totalValue`; the parity test checks both.
+3. **Clock.** Peak hours and cash hours use Chiang Mai time (`ChiangMaiTime.ZONE`,
+   Asia/Bangkok), not the device zone. The input is epoch milliseconds.
+4. **Quantity on option lines.** The native cart allows quantity > 1 on lines with options.
+   The amounts are linear. The web hand-off (phase 4) can split such lines.
+5. **"self" fleet.** As assumed in the fixtures (fleets from the recorded response).
+6. **Web checkout only** (`Quote.webOnly`): Lalamove fleets, shops with several pickup
+   `locations`, NaN amounts (bad prices or bad package codes) and amounts with a fraction.
+   Agent mode, promo codes and driver tips are not in the native checkout. The package codes
+   without rules (`apple`, `elderberry`, `fig`, `durian`) need nothing special: the customer
+   pays the full fare.
 
-Open questions:
+Deliberate differences of the native cart (not copied from the web app):
 
-1. Stale fare on take-away (§14): copy the bug (send a subsidy) or send 0? We suggest 0.
-2. The `free_delivery: true` case (§10): the web total includes the fee but the order page
-   does not. Which total should the native app show? No live shop has it now.
-3. Peak hours and cash hours use the device clock and time zone. Use Asia/Bangkok, or the
-   device zone like the web app?
-4. Lines with options: the web app never has quantity > 1 on them. Can the native cart allow
-   it? The formulas are linear, so the amounts stay correct.
-5. The fleet for a shop with `express: "self"`: the parity data uses the recorded fallback
-   fleet. We did not record a live response for that shop.
+- A line with a note does not merge with a line without a note (the web app merges by item
+  id and keeps the last note). An item with option groups but no chosen option merges (the
+  web app always makes a new line when the item has option groups). The amounts are the same.
+- The item sheet can stop the user at the `up_to` / `exactly` limit. The web app lets the user
+  go over and then refuses "Add" (the result is the same valid order).
+- Lines are not sorted by name.
+
+## 22. Kotlin API (summary)
+
+```kotlin
+val shop = ShopSettings.from(workflow.data)              // WorkflowData
+val fleets = Fleets.from(commerceDelivery)                // or null while loading
+val request = CartPricing.request(cart, shop, nowEpochMs = clock.millis(), fleets = fleets,
+    pickup = LatLon(business.lat, business.lon), address = address, route = Route(metres, "google"),
+    menuFreeGift = menuFreeGift(menu.entries.map { it.raw }))
+val quote: Quote = Pricing.quote(request)
+quote.subtotal; quote.vat; quote.fulfilmentDiscount; quote.deliveryFee; quote.total
+quote.freeDeliveryOver; quote.freeDeliveryRemainder; quote.distanceCheck; quote.blocked
+quote.cashAllowed; quote.webOnly; quote.order?.toJson()  // amounts for POST transactions
+```
+
+A quote without an address (cart screen) gives the items, VAT, discount, the total without a
+fee, and the free delivery threshold when it does not depend on the distance.

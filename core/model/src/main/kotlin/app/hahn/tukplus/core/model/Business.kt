@@ -88,8 +88,9 @@ data class WorkflowData(
     @Serializable(LenientDoubleSerializer::class) val vat: Double? = null,
     @Serializable(LenientIntSerializer::class) val minOrder: Int? = null,
     @Serializable(LenientIntSerializer::class) val freeDeliveryOver: Int? = null,
-    @Serializable(LenientIntSerializer::class) val takeawayDiscount: Int? = null,
-    @Serializable(LenientIntSerializer::class) val dineinDiscount: Int? = null,
+    /** Percent, for example 15 (can have a fraction). */
+    @Serializable(LenientDoubleSerializer::class) val takeawayDiscount: Double? = null,
+    @Serializable(LenientDoubleSerializer::class) val dineinDiscount: Double? = null,
     val deliveryOptions: DeliveryOptions? = null,
     val menuStyle: String? = null,
     val refPrefix: String? = null,

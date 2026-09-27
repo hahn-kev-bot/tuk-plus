@@ -1,6 +1,10 @@
 package app.hahn.tukplus.core.domain
 
+import app.hahn.tukplus.core.model.MenuOptionGroup
 import app.hahn.tukplus.core.model.OptionGroup
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /** How an option group looks in the item sheet. */
 enum class OptionStyle {
@@ -66,10 +70,87 @@ object OptionChoice {
     }
 
     /** True when the group needs more choices before the item can go into the cart. */
-    fun isMissing(group: OptionGroup, chosen: Set<String>): Boolean = when {
-        group.required != true && chosen.isEmpty() -> false
-        group.multipleConstraint == "exactly" && group.multipleN != null && !isSingle(group) -> chosen.size != group.multipleN
-        group.required == true -> chosen.isEmpty()
-        else -> false
+    fun isMissing(group: OptionGroup, chosen: Set<String>): Boolean = isMissing(group, chosen.associateWith { 1 })
+
+    /**
+     * The web rule at "Add to basket" (`checkRequirements`, docs/pricing.md §15), with a
+     * quantity per option ([quantities], option id to quantity):
+     *
+     * - a required group needs at least one option;
+     * - a "multiple" group with "exactly" needs a total quantity of exactly `multiple_n`,
+     *   also when the group is optional (the web app checks it then too). Without
+     *   `multiple_n` it is never valid;
+     * - a "multiple" group with "up_to" can have a total quantity up to `multiple_n`.
+     */
+    fun isMissing(group: OptionGroup, quantities: Map<String, Int>): Boolean {
+        val chosen = quantities.filterValues { it > 0 }
+        if (group.required == true && chosen.isEmpty()) return true
+        if (isSingle(group)) return false
+        val total = chosen.values.sum()
+        val n = group.multipleN
+        return when (group.multipleConstraint) {
+            "exactly" -> n == null || total != n
+            "up_to" -> n != null && total > n
+            else -> false
+        }
+    }
+
+    /** True when the options of [group] can have a quantity each (a "multiple" group with `allow_multiple`). */
+    fun allowsQuantity(group: OptionGroup): Boolean = !isSingle(group) && group.allowMultiple == true
+
+    /**
+     * The groups that the item sheet shows, in the web order (docs/pricing.md §15): the item's
+     * group ids in order, only groups that exist and have options, only groups whose
+     * `condition` is met, and then required groups first.
+     *
+     * A condition is met when the JSON text of a chosen option (lower case, with its
+     * `quantity`) contains the condition text. The condition text is not changed to lower case.
+     * [chosen] is group id to (option id to quantity).
+     */
+    fun visibleGroups(
+        itemGroupIds: List<String>,
+        groups: Map<String, MenuOptionGroup>,
+        chosen: Map<String, Map<String, Int>>,
+    ): List<MenuOptionGroup> {
+        val chosenJson = chosen.flatMap { (groupId, options) ->
+            val group = groups[groupId] ?: return@flatMap emptyList()
+            options.filterValues { it > 0 }.mapNotNull { (optionId, quantity) -> optionJson(group, optionId, quantity) }
+        }
+        val shown = itemGroupIds.mapNotNull { groups[it] }.filter { group ->
+            if (group.group.items.isEmpty()) return@filter false
+            val condition = group.group.condition
+            condition.isNullOrEmpty() || chosenJson.any { it.contains(condition) }
+        }
+        return shown.sortedBy { if (it.group.required == true) 0 else 1 }
+    }
+
+    /** [chosen] without the options of groups that are not shown (the web app removes them). */
+    fun dropHidden(
+        itemGroupIds: List<String>,
+        groups: Map<String, MenuOptionGroup>,
+        chosen: Map<String, Map<String, Int>>,
+    ): Map<String, Map<String, Int>> {
+        var current = chosen
+        while (true) {
+            val visible = visibleGroups(itemGroupIds, groups, current).map { it.blobId }.toSet()
+            val next = current.filterKeys { it in visible }
+            if (next == current) return current
+            current = next
+        }
+    }
+
+    /** The groups (blob ids) that stop "Add to basket", in display order. */
+    fun invalidGroups(
+        itemGroupIds: List<String>,
+        groups: Map<String, MenuOptionGroup>,
+        chosen: Map<String, Map<String, Int>>,
+    ): List<String> = visibleGroups(itemGroupIds, groups, chosen)
+        .filter { isMissing(it.group, chosen[it.blobId].orEmpty()) }
+        .map { it.blobId }
+
+    private fun optionJson(group: MenuOptionGroup, optionId: String, quantity: Int): String? {
+        val raw = (group.raw["items"] as? JsonArray)?.firstOrNull { (it as? JsonObject)?.get("id")?.let { id -> id is JsonPrimitive && id.content == optionId } == true } as? JsonObject
+            ?: return null
+        return JsonObject(raw + ("quantity" to JsonPrimitive(quantity))).toString().lowercase()
     }
 }

@@ -113,4 +113,18 @@ class CartRulesTest {
         assertEquals(listOf(CartOption("g1", "l")), CartRules.options(listOf(g), mapOf("g1" to setOf("l", "unknown"))))
         assertEquals(emptyList(), CartRules.options(listOf(g), emptyMap<String, Set<String>>()))
     }
+
+    @Test
+    fun `max_count and the free gift limit the quantity like the web app`() {
+        val limited = entry(MenuItem("cake", "Cake", price = "50", maxCount = 2))
+        var cart = added(add(null, limited, qty = 5, m = menu(entries = listOf(limited))))
+        assertEquals(2, cart.lines.single().quantity)
+        assertEquals(0, CartRules.addLimit(cart, limited.item))
+        cart = added(add(cart, limited, m = menu(entries = listOf(limited))))
+        assertEquals(2, cart.itemCount) // nothing added
+        val gift = entry(MenuItem("gift", "Gift", price = "0", freeGift = kotlinx.serialization.json.JsonPrimitive("500")))
+        cart = added(add(null, gift, qty = 3, m = menu(entries = listOf(gift))))
+        assertEquals(1, cart.itemCount)
+        assertEquals(null, CartRules.addLimit(cart, water.item))
+    }
 }
