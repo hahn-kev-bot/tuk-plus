@@ -11,8 +11,8 @@ theme. The new design goes into the app after the owner approves the mockup.
 
 | Topic | Decision |
 |---|---|
-| Colors | "Kingfisher" palette: azure blue main color, rufous orange accent, blue-grey neutral surfaces. Not green (too much like Grab), not Tuk yellow. |
-| Dynamic color | Open question: allow Android wallpaper colors, or always use Kingfisher. |
+| Colors | A vibrant tropical-bird palette. The owner picks one of three options on the design page (A electric kingfisher, B rainbow lorikeet, C toucan). Not green (too much like Grab), not Tuk yellow. The tokens below are the earlier, calmer kingfisher palette and will be replaced. |
+| Dynamic color | Off. The app always uses its own palette, not the Android wallpaper colors. |
 | Shapes | A mix of shapes: round-cornered squares, circles, "leaf" (two large and two small corners) and "arch" (round top). The shapes vary on cuisine tiles, shop pictures and menu item pictures. |
 | Type | Bricolage Grotesque for headings, Figtree for text. |
 | Navigation | Bottom navigation bar: Home, Shops, Orders, Account. |
@@ -37,8 +37,8 @@ theme. The new design goes into the app after the owner approves the mockup.
 
 The dark scheme comes from the same seed when the design goes into the app.
 
-## Still to design
+## Next
 
-- Shops list screen (the "Shops" tab).
-- Cart (with the order type choice), checkout, orders, account.
-- Dark theme.
+1. The owner picks the palette. Then the design is locked.
+2. Build the design into the app (Home, Shop menu with list and grid views, Item sheet).
+3. Other screens (Shops list, cart, checkout, orders, account, dark theme) are designed later.
