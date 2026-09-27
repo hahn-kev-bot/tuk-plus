@@ -244,18 +244,18 @@ Payment happens outside the app. The app shows:
 
 ## 8. Phases
 
-Each phase ends with a build that works. Each phase gets a detailed
-specification in [docs/phases/](phases/README.md) when it starts.
+Each phase ends with a build that works. Each phase has its own file in
+[docs/phases/](phases/README.md).
 
 | Phase | Content | Done when |
 |---|---|---|
-| 0. Foundations ✅ | Gradle project, modules, CI (build, lint, unit tests). Session logger (§9). `tools/api-probe` that calls the live read-only endpoints and checks our models. Record JSON fixtures. | The probe parses all Chiang Mai eateries and 25+ menus without errors. Logs export works. |
+| 0. Foundations ✅ [spec](phases/phase-0.md) | Gradle project, modules, CI (build, lint, unit tests). Session logger (§9). `tools/api-probe` that calls the live read-only endpoints and checks our models. Record JSON fixtures. | The probe parses all Chiang Mai eateries and 25+ menus without errors. Logs export works. |
 | 1. Browse (no login) ✅ built, [spec](phases/phase-1.md) | Home, Eat list, Search, Shop menu. Response cache, `Cached<T>`, age chip, prefetch. | Cold start shows Home in < 1 s from cache. Shop opens at once from cache. |
-| 2. Cart and pricing | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in Room. | Unit tests match the web app results for every recorded menu (see §10). |
-| 3. Account | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
-| 4. Checkout | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. Web checkout fallback (§8a) with the background order check. | The owner places a real order in Tuk plus, and one with the fallback. The shop sees correct items and totals. The check logs its result. |
-| 5. Orders and payment | Order list, detail, polling, foreground tracking notification, driver map, payment details panel, payment slip upload, cancel, "Open on Tuk website". | The owner follows a real order from placed to delivered and pays with the details shown. |
-| 6. Polish | Accessibility, dark theme, offline mode, error reporting, release build, Play Store listing. | Beta testers use it for a week. |
+| 2. Cart and pricing [spec](phases/phase-2.md) | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in Room. | Unit tests match the web app results for every recorded menu (see §10). |
+| 3. Account [spec](phases/phase-3.md) | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
+| 4. Checkout [spec](phases/phase-4.md) | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. Web checkout fallback (§8a) with the background order check. | The owner places a real order in Tuk plus, and one with the fallback. The shop sees correct items and totals. The check logs its result. |
+| 5. Orders and payment [spec](phases/phase-5.md) | Order list, detail, polling, foreground tracking notification, driver map, payment details panel, payment slip upload, cancel, "Open on Tuk website". | The owner follows a real order from placed to delivered and pays with the details shown. |
+| 6. Polish [spec](phases/phase-6.md) | Accessibility, dark theme, offline mode, error reporting, release build, Play Store listing. | Beta testers use it for a week. |
 
 ## 8a. Web checkout fallback
 

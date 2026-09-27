@@ -1,5 +1,9 @@
 # Phase 1 – Browse (no login)
 
+Status: **built**. The owner tested the first build (2026-09-27, logs); the
+redesigned build is in the owner's test. The speed goal for a start with a full
+cache is not measured yet.
+
 ## Goal
 
 The user can browse Chiang Mai shops and menus fast, also on a slow network.
@@ -82,3 +86,20 @@ Install the debug APK. For each step, note what is wrong. Then share the logs
    "Updating…" and then "Updated now".
 9. **Compare with the website.** For two shops, compare open state, hours today,
    menu items and prices with tukapp.co.
+
+## Changes after the first build
+
+| Date | Change | Why |
+|---|---|---|
+| 2026-09-27 | Shared debug signing key (`app/signing/`). | The owner could not install a new build over the old one. |
+| 2026-09-27 | Cache log events have `read_ms`, `parse_ms`, `write_ms`. | The first device log showed 870 ms between the shop list download and its cache write. |
+| 2026-09-27 | New design (docs/design.md): Rainbow lorikeet colors, bundled fonts, mixed picture shapes, bottom navigation (Home, Shops, Orders, Account), carousel, shop photo header with an info sheet, list / grid menu switch, item sheet with option choices. | The owner did not like the Tuk web app's look. |
+| 2026-09-27 | The order type choice moved out of the shop page. | Owner decision: it belongs in the cart (phase 2). |
+| 2026-09-27 | Fix: optional single-choice options can be removed (`OptionChoice`, 7 tests). | The owner could not unselect "extra cheese". |
+| 2026-09-27 | Fix: the Home tab always goes back to Home. | The Home tab did nothing when a shop list was open on top of Home. |
+
+## Still open
+
+- Measure `perf home_ready` with a full cache (force-stop, open again, share logs).
+- Find where the 870 ms after the shop list download goes (the new `parse_ms`
+  and `write_ms` fields).
