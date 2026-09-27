@@ -1,6 +1,7 @@
 package app.hahn.tukplus.core.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /** A shop. From `businesses?type=eatery`, `businesses/{id}` and others. */
@@ -94,6 +95,37 @@ data class WorkflowData(
     val refPrefix: String? = null,
     @Serializable(LenientBooleanSerializer::class) val test: Boolean? = null,
     val membership: JsonObject? = null,
+    // Price settings (docs/pricing.md). Missing values mean "not set".
+    /** Cap of the Tuk commission in baht. */
+    @Serializable(LenientDoubleSerializer::class) val maxRemit: Double? = null,
+    @Serializable(LenientBooleanSerializer::class) val freeDelivery: Boolean? = null,
+    /** Metres. `free_delivery_over` applies only up to this distance. */
+    @Serializable(LenientDoubleSerializer::class) val freeDeliveryDistance: Double? = null,
+    /** GeoJSON polygon rings `[[[lon, lat], …]]`. Delivery inside it is free. */
+    val freeDeliveryPolygon: JsonElement? = null,
+    val freeDeliveryTo: String? = null,
+    /** Kilometres. */
+    @Serializable(LenientDoubleSerializer::class) val maxDistance: Double? = null,
+    /** Fraction, for example 0.1. The menu shows higher prices with a bigger discount. */
+    @Serializable(LenientDoubleSerializer::class) val visualDiscount: Double? = null,
+    val menuOptions: MenuOptions? = null,
+    /** Own delivery (`express` = "self"): baht per km. */
+    @Serializable(LenientDoubleSerializer::class) val deliveryFeePerKm: Double? = null,
+    @Serializable(LenientDoubleSerializer::class) val minDeliveryFee: Double? = null,
+    val orderOptions: OrderOptions? = null,
+    /** Several pickup points. Not supported by the native checkout. */
+    val locations: JsonElement? = null,
+)
+
+@Serializable
+data class MenuOptions(
+    /** The item's percent discount also applies to its option prices. */
+    @Serializable(LenientBooleanSerializer::class) val propagateDiscounts: Boolean? = null,
+)
+
+@Serializable
+data class OrderOptions(
+    @Serializable(LenientBooleanSerializer::class) val autoconfirm: Boolean? = null,
 )
 
 @Serializable
@@ -101,4 +133,12 @@ data class DeliveryOptions(
     /** "delayed" or another value. */
     val type: String? = null,
     @Serializable(LenientIntSerializer::class) val delayDuration: Int? = null,
+    /** Baht added to the delivery remit (the shop's part of the fare). */
+    @Serializable(LenientDoubleSerializer::class) val remitAmount: Double? = null,
+    /** Baht added to the fare for the driver (cash). */
+    @Serializable(LenientDoubleSerializer::class) val extraCash: Double? = null,
+    @Serializable(LenientDoubleSerializer::class) val extraTukpay: Double? = null,
+    @Serializable(LenientBooleanSerializer::class) val reversed: Boolean? = null,
+    val driverNote: String? = null,
+    val signName: String? = null,
 )
