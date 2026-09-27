@@ -32,8 +32,8 @@ card payment (Stripe), shop and driver screens, LINE/Facebook/Apple login.
 
 | Fact | Effect on the app |
 |---|---|
-| Every call takes about 1 s. The server sends no cache headers, no ETag, no gzip. | We must cache all data in the app. We cannot use HTTP caching. |
-| The web shop page makes 5 calls **in series** (about 5 s). Only 2–3 are needed, and they can run in parallel. | Shop page from network: about 1.3 s. From cache: at once. |
+| The web app waits about 1 s per call. Most of that is new TLS connections: with one reused HTTP/2 connection a call takes about 0.3 s (measured in phase 0). The server sends no cache headers, no ETag, no gzip. | One shared OkHttp client for the whole app. We must still cache all data in the app, because we cannot use HTTP caching. |
+| The web shop page makes 5 calls **in series** (about 5 s). Only 2–3 are needed, and they can run in parallel. | Shop page from network: about 0.4 s. From cache: at once. |
 | The eatery list is the whole region in one call (256 shops, 608 KB, about 2 s). All filters are client side. | Fetch it one time, store it, filter and search it locally. |
 | Open status, distance, prices and delivery fees are calculated on the client. | We calculate them locally. No network wait. Open status is always current, also with old cached data. |
 | The client sends the totals and fees in the order. | Our pricing code must match the web app exactly. We test it with many recorded menus. |
@@ -49,7 +49,7 @@ card payment (Stripe), shop and driver screens, LINE/Facebook/Apple login.
 | UI | Jetpack Compose, Material 3, Navigation Compose |
 | Architecture | MVVM + unidirectional data flow; repositories expose `Flow<Cached<T>>` |
 | DI | Hilt |
-| Network | OkHttp + Retrofit + kotlinx.serialization (lenient: prices are strings, `null` lists, plain-text bodies) |
+| Network | OkHttp + kotlinx.serialization, with a small own client (`TukApi`). No Retrofit: the API mixes JSON, plain text, `null` bodies and HTTP 500 answers that are not errors, and a thin client handles this more simply. |
 | Local cache | Room (SQLite) |
 | Settings / session | DataStore; user id in EncryptedSharedPreferences or Tink |
 | Images | Coil 3 with a large disk cache |
@@ -64,7 +64,7 @@ card payment (Stripe), shop and driver screens, LINE/Facebook/Apple login.
 ```
 app/                      Application, navigation, DI setup
 core/model/               Plain data classes (Shop, MenuItem, OptionGroup, Order, …)
-core/network/             Retrofit API, JSON adapters, error mapping, auth interceptor
+core/network/             TukApi client, auth, retries (GET only), HTTP logging, error mapping
 core/database/            Room entities, DAOs
 core/data/                Repositories, cache policy, sync workers
 core/pricing/             Pure Kotlin: price, options, VAT, delivery fare, open hours
@@ -80,7 +80,11 @@ core/logging/             Session log writer, redaction, export
 tools/api-probe/          JVM command-line tool, run manually: calls the live read-only API and checks our models
 ```
 
-`core/pricing` has no Android code. We can test it fast on the JVM.
+`core/model`, `core/network`, `core/logging` and `core/pricing` have no Android
+code. We can test them fast on the JVM, and `tools/api-probe` can use them.
+
+Phase 0 made `app`, `core/model`, `core/network`, `core/logging` and
+`tools/api-probe`. The other modules come with the phase that needs them.
 
 ## 5. Speed and caching design
 
@@ -241,7 +245,7 @@ Each phase ends with a build that works.
 
 | Phase | Content | Done when |
 |---|---|---|
-| 0. Foundations | Gradle project, modules, CI (build, lint, unit tests). Session logger (§9). `tools/api-probe` that calls the live read-only endpoints and checks our models. Record JSON fixtures. | The probe parses all Chiang Mai eateries and 25+ menus without errors. Logs export works. |
+| 0. Foundations ✅ | Gradle project, modules, CI (build, lint, unit tests). Session logger (§9). `tools/api-probe` that calls the live read-only endpoints and checks our models. Record JSON fixtures. | The probe parses all Chiang Mai eateries and 25+ menus without errors. Logs export works. |
 | 1. Browse (no login) | Home, Eat list, Search, Shop menu. Room cache, `Cached<T>`, age chip, prefetch. | Cold start shows Home in < 1 s from cache. Shop opens at once from cache. |
 | 2. Cart and pricing | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in Room. | Unit tests match the web app results for every recorded menu (see §10). |
 | 3. Account | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
@@ -463,7 +467,7 @@ All automatic tests are **logic only**. They do not use the network.
 | No push notifications. | Polling, with a foreground service while an order is ongoing (§5.5). |
 | Weak auth: the user id is the only secret. | Encrypted storage. No logging. No sharing. |
 | No test shops. Test orders are real orders. | Only the owner places orders. Debug builds show the exact order JSON and ask for a second confirmation before sending. Use the fallback for new kinds of shops first, so the check can compare. |
-| Packages other than `r_x_y` (`p_`, `f_`, `thai`) are not fully traced. | For these shops, checkout offers only the web fallback until we trace that code. The background check collects data for them. |
+| Packages other than `r_x_y` are not fully traced. Seen: `p` (12 shops), `f` (10), `apple` (5), `elderberry` (2), `fig` (1), `durian` (1); the web code also has `thai`. | For these shops, checkout offers only the web fallback until we trace that code. The background check collects data for them. |
 | Route distance: the web app uses GraphHopper with its own key. | Use Tuk's `GET directions` first (same result source), then straight line × 1.25. |
 
 There are no open questions for the project owner now.

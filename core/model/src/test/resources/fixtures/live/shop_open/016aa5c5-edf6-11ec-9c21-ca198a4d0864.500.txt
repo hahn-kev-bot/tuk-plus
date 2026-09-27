@@ -1,0 +1,1 @@
+checkCommerceAllowTransaction: Shop is closed for holiday (2027-07-21T17:00:00.000Z)

@@ -1,0 +1,1 @@
+checkCommerceAllowTransaction: Shop is not currently open (Today's Open Hours: 1730-2200)

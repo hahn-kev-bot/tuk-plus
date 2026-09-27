@@ -18,7 +18,7 @@ The web app also has driver, dispatcher and shop-admin screens. We ignore them.
 | Compression | None. The server ignores `Accept-Encoding: gzip`. |
 | Cache headers | None. No `Cache-Control`, `ETag` or `Last-Modified`. |
 | CORS | `*` |
-| Latency | About 0.5 s server time per call. About 1 s end to end. The eatery list (608 KB) takes about 2 s. |
+| Latency | About 0.3 s per call **when the HTTP/2 connection is reused** (measured with OkHttp on 2026-09-27; the eatery list, 608 KB, also about 0.35 s). A new TLS connection adds about 0.5–0.7 s, and the web app often pays it, so it is slower (about 1 s per call). |
 
 Response rules:
 
@@ -219,9 +219,14 @@ Remove spaces, `:` and `.`. Split on `,`. Each part is `HHMM-HHMM`. Open when
 Use the `Asia/Bangkok` time zone for Thai shops (not the device zone).
 
 Server check (use before checkout only):
-`GET helpers/shop_open?id={businessId}` or `?handle=@x`. It always returns HTTP 200
-with plain text: `yes`, or a reason such as
-`checkCommerceAllowTransaction: Shop is not currently open (Shop is closed today)`.
+`GET helpers/shop_open?id={businessId}` or `?handle=@x`. The answer is plain text:
+
+- Open: HTTP 200, `yes`.
+- Closed: **HTTP 500** with a reason that starts with `checkCommerceAllowTransaction:`,
+  for example `… Shop is not currently open (Shop is closed today)`,
+  `… (Today's Open Hours: 1730-2200)` or `… Shop is closed for holiday (2027-07-21T17:00:00.000Z)`.
+  This is a normal answer, not a failure. (Checked with 30 shops on 2026-09-27.)
+- Unknown handle: HTTP 500, `FindBusinessByPremiumLink: sql: no rows in result set`.
 
 ### 5.3 For you
 
@@ -234,7 +239,8 @@ with plain text: `yes`, or a reason such as
 | Shops | `GET autocomplete?business={text}` | `{"businesses":[{"key":"Pizza Mania","value":"<businessId>","pic":"…","hidden":true}]}`. Drop entries that are hidden or have no `pic`. |
 | Menu items | `GET search/menu_items?text={text}` | `[{"business_name","business_id","business_pic","count"}]`. Counts only. Open the shop and filter its menu locally. |
 
-Search is global (no location). It is a substring match. No match returns `null`.
+Search is global (no location). It is a substring match. No match: shop search
+returns `{"businesses":null}`, menu search returns `null`.
 The web app starts to search at 3 characters, with a 1 s debounce.
 
 ## 6. Shop and menu
@@ -358,14 +364,37 @@ Shop package code `workflow.data.fruit`, for example `r_20_10`:
   `delivery_subsidy = round(0.10 × subtotal)`.
   Fee shown to the customer = `max(0, client − delivery_subsidy)`.
   So delivery is free when the subtotal is ≥ `ceil(client / 0.10)`.
-- Other prefixes (`p_`, `f_`, `thai`) use a billing percent instead. We must
-  read these paths in the code again before we support such shops.
+- Other package codes use other rules. We must read these paths in the web code
+  before we support such shops. Codes seen on 2026-09-27 (256 Chiang Mai shops):
+  `r` (220), `p` (12), `f` (10), `apple` (5), `elderberry` (2), `fig` (1),
+  `durian` (1). The web code also knows `thai`.
 
 Other rules:
 
 - `min_order` applies to delivery only.
 - Orders of ฿1000 or more use `delivery.type = "delayed"` with `delay_duration = 26`.
 - There is no service fee ("Platform Fee ฿0").
+
+### 7.1 Values seen in the live data (2026-09-27)
+
+Recorded by `tools/api-probe` (see `core/model/src/test/resources/fixtures/live/report.md`):
+
+- `delivery_options.type`: `delayed` (143), none (87), `normal` (19), `immediate` (2).
+- `express` fleet names: `Chiang Mai Express Delivery`, `Chiang Mai South Express Delivery`,
+  `Chiang Mai North Express Delivery`, and `self` (1 shop; probably own delivery).
+- `payment_options`: only `cash`.
+- `pricing_array` length: 27 or 28.
+- Option groups: `select` is `single` or `multiple`; `multiple_constraint` is `none`
+  or `exactly` (`up_to` not seen).
+- Item `discount_type`: mostly empty, `percent` (4), `number` (2).
+- Opening hours: about 25 text forms, for example `0800-1600`, `07:30-14:00`,
+  `11.00-21.00`, `9999-99.99`, `18:00-22.30`, `1100-1400, 1700-2100`, `11:00 -14:00`.
+  Some have extra spaces. The parser must remove spaces, `:` and `.` first.
+- Workflow fields that we do not read yet but may need for pricing: `cash`,
+  `delivery`, `free_delivery`, `free_delivery_distance`, `free_delivery_polygon`,
+  `max_remit`, `visual_discount`, `takeaway_options`, `order_options`, `prompt_pay`.
+- Menu item fields that we do not read yet: `languages`, `color`, `by_weight`,
+  `contain_image`, `notes`, and translations `zh`, `es`.
 
 ## 7a. Cart
 

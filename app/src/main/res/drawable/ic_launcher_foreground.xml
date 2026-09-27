@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "T+" mark on the adaptive icon safe zone (108 × 108 dp canvas). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#1C1C1C"
+        android:pathData="M34,36h30v8h-11v30h-8v-30h-11z" />
+    <path
+        android:fillColor="#1C1C1C"
+        android:pathData="M64,54h6v-6h6v6h6v6h-6v6h-6v-6h-6z" />
+</vector>

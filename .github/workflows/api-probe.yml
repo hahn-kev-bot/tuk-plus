@@ -1,0 +1,39 @@
+name: API probe (manual)
+
+# Calls only read-only GET endpoints of the live Tuk API (PLAN.md §10).
+# Start it by hand: Actions → "API probe (manual)" → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      menus:
+        description: Number of shop menus to check
+        default: "30"
+        required: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Run the probe and record fixtures
+        run: ./gradlew :tools:api-probe:run --args="--menus ${{ inputs.menus }} --record build/probe"
+
+      - name: Report
+        if: always()
+        run: cat build/probe/report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload recorded responses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-probe-recording
+          path: build/probe/

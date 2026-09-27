@@ -1,0 +1,1 @@
+checkCommerceAllowTransaction: Shop is not currently open (Shop is closed today)
