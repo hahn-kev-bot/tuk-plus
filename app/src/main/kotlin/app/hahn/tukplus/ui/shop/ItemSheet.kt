@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import app.hahn.tukplus.R
 import app.hahn.tukplus.core.domain.MenuRules
 import app.hahn.tukplus.core.domain.OptionChoice
+import app.hahn.tukplus.core.domain.OptionStyle
 import app.hahn.tukplus.core.model.Menu
 import app.hahn.tukplus.core.model.MenuEntry
 import app.hahn.tukplus.core.model.MenuOptionGroup
@@ -138,9 +139,8 @@ private fun OptionGroupCard(group: MenuOptionGroup, chosen: Set<String>, onChang
     val g = group.group
     val colors = MaterialTheme.colorScheme
     val single = OptionChoice.isSingle(g)
-    // A required single choice looks like radio buttons. An optional one can be removed
-    // again, so it looks like check boxes (the owner could not unselect "Extra cheese").
-    val radio = single && g.required == true
+    val style = OptionChoice.style(g)
+    val radio = style != OptionStyle.CHECKBOX
     Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -161,6 +161,19 @@ private fun OptionGroupCard(group: MenuOptionGroup, chosen: Set<String>, onChang
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant,
             )
+            if (style == OptionStyle.RADIO_WITH_NONE) {
+                // Only one option can be active, and the group is optional: "None" removes the choice.
+                Row(
+                    Modifier.selectable(selected = chosen.isEmpty(), role = Role.RadioButton) { onChange(OptionChoice.tapNone(g, chosen)) }
+                        .fillMaxWidth().height(52.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(stringResource(R.string.option_none), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    RadioButton(selected = chosen.isEmpty(), onClick = null)
+                }
+                HorizontalDivider(color = colors.surfaceContainerHighest)
+            }
             g.items.forEachIndexed { index, option ->
                 val soldOut = option.outOfStock == true
                 val selected = option.id in chosen

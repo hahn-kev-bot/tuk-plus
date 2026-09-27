@@ -97,6 +97,7 @@
     <string name="option_badge_required">Required</string>
     <string name="option_badge_optional">Optional</string>
     <string name="option_free">Free</string>
+    <string name="option_none">None</string>
     <string name="item_note">Note for the shop</string>
     <string name="item_note_hint">For example: no chili, please</string>
     <string name="item_less">One less</string>

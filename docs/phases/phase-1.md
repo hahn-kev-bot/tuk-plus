@@ -97,6 +97,7 @@ Install the debug APK. For each step, note what is wrong. Then share the logs
 | 2026-09-27 | The order type choice moved out of the shop page. | Owner decision: it belongs in the cart (phase 2). |
 | 2026-09-27 | Fix: optional single-choice options can be removed (`OptionChoice`, 7 tests). | The owner could not unselect "extra cheese". |
 | 2026-09-27 | Fix: the Home tab always goes back to Home. | The Home tab did nothing when a shop list was open on top of Home. |
+| 2026-09-27 | Option styles (`OptionStyle`): required choose-one = radio buttons; optional choose-one with one option = check box; optional choose-one with two or more options = radio buttons with a "None" row (selected at the start); choose-several = check boxes. | The owner found an optional choose-one group with several options that showed check boxes, so it looked as if more than one could be active. |
 
 ## Still open
 

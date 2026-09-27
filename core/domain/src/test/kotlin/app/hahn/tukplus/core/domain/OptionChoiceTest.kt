@@ -14,12 +14,33 @@ class OptionChoiceTest {
         OptionGroup(name = "g", select = select, required = required, multipleConstraint = constraint, multipleN = n, items = items)
 
     @Test
-    fun `optional single choice can be removed again`() {
+    fun `optional group with one option is a check box that can be removed again`() {
         // The owner's bug: "Extra cheese" could not be unselected.
-        val g = group("single", required = false)
+        val g = OptionGroup(name = "cheese", select = "single", required = false, items = listOf(OptionItem("a", "Extra cheese")))
+        assertEquals(OptionStyle.CHECKBOX, OptionChoice.style(g))
         val chosen = OptionChoice.tap(g, emptySet(), "a")
         assertEquals(setOf("a"), chosen)
         assertEquals(emptySet(), OptionChoice.tap(g, chosen, "a"))
+    }
+
+    @Test
+    fun `optional choose one with several options is radio with None`() {
+        val g = group("single", required = false)
+        assertEquals(OptionStyle.RADIO_WITH_NONE, OptionChoice.style(g))
+        var chosen = OptionChoice.tap(g, emptySet(), "a")
+        chosen = OptionChoice.tap(g, chosen, "b")
+        assertEquals(setOf("b"), chosen) // only one can be active
+        assertEquals(setOf("b"), OptionChoice.tap(g, chosen, "b")) // a radio stays on
+        assertEquals(emptySet(), OptionChoice.tapNone(g, chosen))
+    }
+
+    @Test
+    fun `styles`() {
+        assertEquals(OptionStyle.RADIO, OptionChoice.style(group("single", required = true)))
+        assertEquals(OptionStyle.CHECKBOX, OptionChoice.style(group("multiple", required = false)))
+        assertEquals(OptionStyle.CHECKBOX, OptionChoice.style(group("multiple", required = true)))
+        // None does nothing in a required group.
+        assertEquals(setOf("a"), OptionChoice.tapNone(group("single", required = true), setOf("a")))
     }
 
     @Test
