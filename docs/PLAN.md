@@ -10,8 +10,8 @@ notifications. The project owner tests orders manually with real orders.
 ## 1. Goals
 
 1. Browse shops and menus fast, also on a slow network.
-2. Order food: our own fast menu and cart. The real Tuk web app, in a WebView,
-   does the checkout and places the order (§8a).
+2. Order food: cart, options, delivery or pickup, place the order. The real Tuk
+   web app, in a WebView, is a fallback for checkout (§8a).
 3. Track orders and show payment details. Payment itself happens outside the app.
 4. Always show how old the data on the screen is.
 
@@ -159,8 +159,10 @@ the old data kept. The UI never has an empty screen when old data exists.
 
 - Timeouts: connect 10 s, read 30 s (the eatery list is big).
 - GET requests: retry 2 times with backoff (1 s, 3 s) on network errors and 5xx.
-- Tuk plus does not send `POST transactions` itself in release 1. The web app
-  in the WebView places the order (§8a).
+- `POST transactions` (place order) is **never** retried by itself. On a timeout,
+  the app checks the ongoing orders for our `short_id`. If it finds none, the app
+  asks the user: "Try again" or "Finish on Tuk website" (§8a). This prevents
+  double orders.
 - Map plain-text 500 bodies to user messages. Keep the raw text in debug logs.
 - Parse the large eatery list on a background thread, with streaming JSON.
 - Show skeleton screens, not spinners, when there is no cache.
@@ -199,12 +201,12 @@ Our additions:
 4. **Shop** – banner, hours today, open state, fulfilment types, category tabs,
    menu list, item search. Cache age chip.
 5. **Option picker** – bottom sheet with option groups and validation.
-6. **Cart** – items, options, quantities, notes, subtotal, "changed since
-   added" warnings. The button "Continue to checkout" opens the web checkout
-   (§8a).
-7. **Web checkout** – the Tuk web app in a WebView, with our cart and login.
-   The user selects fulfilment type, address, time and payment method there, and
-   places the order.
+6. **Cart / checkout** – items, notes, fulfilment type, address (map pin +
+   saved addresses), time (now or later today), payment method, fee breakdown,
+   total, place order. A second button, "Finish on Tuk website", opens the web
+   checkout fallback (§8a).
+7. **Web checkout (fallback)** – the Tuk web app in a WebView, with our cart and
+   login. The user finishes the order there.
 8. **Orders** – ongoing and history tabs.
 9. **Order detail** – status timeline, items, totals, driver on map when
    `enroute`, **payment details panel** (see §7), cancel while `initiated`,
@@ -243,18 +245,27 @@ Each phase ends with a build that works.
 | 1. Browse (no login) | Home, Eat list, Search, Shop menu. Room cache, `Cached<T>`, age chip, prefetch. | Cold start shows Home in < 1 s from cache. Shop opens at once from cache. |
 | 2. Cart and pricing | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in Room. | Unit tests match the web app results for every recorded menu (see §10). |
 | 3. Account | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
-| 4. Checkout | Web checkout hand-off (§8a): WebView, state injection, order capture, return to the app. Background order check: our pricing and order JSON compared with the placed order. | The owner places a real order through the app. The check runs and logs its result. |
+| 4. Checkout | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. Web checkout fallback (§8a) with the background order check. | The owner places a real order in Tuk plus, and one with the fallback. The shop sees correct items and totals. The check logs its result. |
 | 5. Orders and payment | Order list, detail, polling, foreground tracking notification, driver map, payment details panel, payment slip upload, cancel, "Open on Tuk website". | The owner follows a real order from placed to delivered and pays with the details shown. |
 | 6. Polish | Accessibility, dark theme, offline mode, error reporting, release build, Play Store listing. | Beta testers use it for a week. |
 
-## 8a. Checkout in the web app
+## 8a. Web checkout fallback
 
-Tuk plus does **not** place orders itself. Our app does the fast part (browse,
-menu, cart). The real Tuk web app does the checkout and places the order, in an
-in-app **WebView**. The web app is the reference implementation, so each order
-is correct even if our pricing code has a bug. In the background, Tuk plus
-calculates the same order and compares the two. This finds bugs in our code
-with real orders and no risk.
+Tuk plus places orders with its own checkout. The real Tuk web app is a
+**fallback**: at checkout the user can select "Finish on Tuk website" instead of
+"Place order". Then the web app, in an in-app **WebView**, does the rest of the
+checkout and places the order.
+
+The app offers the fallback:
+
+- always, as a second button at checkout;
+- when our checkout finds a problem before the order is sent (validation error,
+  shop package that we do not support yet, pricing error, fee not available);
+- when `POST transactions` fails and our idempotency check finds no order (§5.6).
+
+The web app is the reference implementation, so a fallback order is correct even
+if our code has a bug. In the background, Tuk plus calculates the same order and
+compares the two. This finds bugs in our code with real orders.
 
 The WebView is inside Tuk plus, not Chrome or a Custom Tab, because the app must
 write into the web app's local storage.
@@ -290,7 +301,9 @@ In Android:
 
 ### Checkout flow
 
-1. The user fills the cart in Tuk plus and taps "Continue to checkout".
+1. The user fills the cart in Tuk plus, and at checkout taps "Finish on Tuk
+   website". The choices already made in our checkout (fulfilment type, address,
+   time, payment method) are saved for the check.
 2. Tuk plus saves a **snapshot** of the cart and all pricing inputs it has
    (menu version, workflow settings, fleet pricing).
 3. The WebView opens `https://tukapp.co/shop/<businessId>` with the cart and
@@ -313,8 +326,8 @@ show in the web app's saved-address list.
 
 ### Background order check
 
-After the order is placed, a WorkManager job runs the check. It does not block
-the user.
+After a fallback order is placed, a WorkManager job runs the check. It does not
+block the user.
 
 1. Input: our cart snapshot, the captured `POST transactions` body, and the order
    from `commerce/transaction?id=`.
@@ -334,8 +347,9 @@ the user.
 7. Debug builds show a notification when there is a difference. Settings →
    Debug shows a list of recent checks.
 
-When the checks show that our code matches for all shop types, a later release
-can place orders directly from Tuk plus. That is not in release 1.
+Orders placed with our own checkout get a smaller check: the app reads the
+order back with `commerce/transaction?id=` and checks that the server stored
+what we sent (items, amounts, fare). It logs any difference.
 
 ### Open an order in the web app
 
@@ -355,8 +369,7 @@ can place orders directly from Tuk plus. That is not in release 1.
 - The web app uses the device time zone for open hours. Phones in Thailand are
   correct.
 - The WebView is slower than our own screens, because the web app loads its
-  bundle and data again. Keep the WebView process warm: create it in the
-  background when the cart gets its first item.
+  bundle and data again. This is acceptable for a fallback.
 
 ## 9. Logging
 
@@ -387,13 +400,13 @@ to find the bug without the device.
 | Area | Events |
 |---|---|
 | Network | Every request: method, path, query, status, duration, response size, retry count. On errors and parse failures: the first 4 KB of the body. |
-| Write calls | `PATCH transactions/*`, login, addresses, slip upload: the **full** request body and the full response. |
+| Write calls | `POST transactions`, `PATCH transactions/*`, login, addresses, slip upload: the **full** request body and the full response. |
 | Web checkout | Hand-off start, injected values (redacted), read-back result, web app URL changes, the captured `POST transactions` body and response, WebView errors, time to load. |
 | Order check | Cart snapshot, all pricing inputs, our order JSON, the web app's order JSON, the list of differences or `match`. |
 | Cache | Hit or miss, age of the data, refresh start, refresh result. |
 | Pricing | Input (cart lines, options, workflow settings, fleet pricing, distance) and every output number. With this we can repeat a price calculation in a unit test. |
 | Orders | Every state change seen by polling, with time. Polling start and stop. Idempotency checks. |
-| UI | Screen opened, main actions (add to cart, continue to checkout, cancel), validation errors shown to the user. |
+| UI | Screen opened, main actions (add to cart, checkout, place order, finish on website, cancel), validation errors shown to the user. |
 | App | Start, foreground, background, workers, foreground service start and stop, permissions. |
 
 ### 9.3 Privacy
@@ -445,11 +458,12 @@ All automatic tests are **logic only**. They do not use the network.
 | Risk / question | Plan |
 |---|---|
 | The API is not public. Tuk can change it. | Tuk gave permission. Run the manual API probe before each release and when the backend `version` changes. The app logs the backend version at each session start. |
-| Wrong totals or fees in an order. | The web app places all orders. Our pricing only runs in the background check (§8a). |
+| Wrong totals or fees in an order. | Exact copy of the web formulas and parity tests. The web checkout fallback, with the background check (§8a), finds differences with real orders. Compare with `delivery/price_check` in debug builds. |
+| Double orders on a slow network. | `short_id` idempotency check (§5.6). |
 | No push notifications. | Polling, with a foreground service while an order is ongoing (§5.5). |
 | Weak auth: the user id is the only secret. | Encrypted storage. No logging. No sharing. |
-| No test shops. Test orders are real orders. | Only the owner places orders, through the web app. Each order runs the background check. |
-| Packages other than `r_x_y` (`p_`, `f_`, `thai`) are not fully traced. | Orders still work, because the web app places them. The background check marks these shops as "not supported yet" until we trace that code. |
+| No test shops. Test orders are real orders. | Only the owner places orders. Debug builds show the exact order JSON and ask for a second confirmation before sending. Use the fallback for new kinds of shops first, so the check can compare. |
+| Packages other than `r_x_y` (`p_`, `f_`, `thai`) are not fully traced. | For these shops, checkout offers only the web fallback until we trace that code. The background check collects data for them. |
 | Route distance: the web app uses GraphHopper with its own key. | Use Tuk's `GET directions` first (same result source), then straight line × 1.25. |
 
 There are no open questions for the project owner now.
