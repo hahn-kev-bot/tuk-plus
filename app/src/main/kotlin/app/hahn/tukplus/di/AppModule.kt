@@ -16,6 +16,7 @@ import app.hahn.tukplus.logging.AppLogging
 import app.hahn.tukplus.logging.InstallIds
 import app.hahn.tukplus.logging.LogShare
 import app.hahn.tukplus.platform.LocationProvider
+import app.hahn.tukplus.platform.MenuViewPreference
 import app.hahn.tukplus.platform.NetworkState
 import dagger.Module
 import dagger.Provides
@@ -105,6 +106,10 @@ object AppModule {
     @Provides
     @Singleton
     fun recentShops(@ApplicationContext context: Context) = RecentShops(File(context.filesDir, "recent_shops.txt"))
+
+    @Provides
+    @Singleton
+    fun menuViewPreference(@ApplicationContext context: Context) = MenuViewPreference(context)
 
     @Provides
     @Singleton

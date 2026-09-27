@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,6 +34,8 @@ import app.hahn.tukplus.R
 import app.hahn.tukplus.core.data.Cached
 import app.hahn.tukplus.ui.common.ShopCard
 import app.hahn.tukplus.ui.common.TukImage
+import app.hahn.tukplus.ui.theme.PictureShapes
+import app.hahn.tukplus.ui.theme.TukIcons
 
 @Composable
 fun SearchScreen(
@@ -45,13 +49,15 @@ fun SearchScreen(
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
+            IconButton(onClick = onBack) { Icon(TukIcons.Back, contentDescription = stringResource(R.string.back)) }
             OutlinedTextField(
                 value = state.text,
                 onValueChange = viewModel::setText,
                 placeholder = { Text(stringResource(R.string.search_hint)) },
+                leadingIcon = { Icon(TukIcons.Search, contentDescription = null) },
                 singleLine = true,
-                modifier = Modifier.weight(1f).padding(end = 8.dp).focusRequester(focus),
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier.weight(1f).padding(end = 12.dp, top = 8.dp, bottom = 8.dp).focusRequester(focus),
             )
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -91,7 +97,7 @@ fun SearchScreen(
 
 @Composable
 private fun Title(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
+    Text(text, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp))
 }
 
 @Composable
@@ -106,7 +112,7 @@ private fun ResultRow(pic: String?, name: String, detail: String?, onClick: () -
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TukImage(pic, Modifier.size(48.dp))
+        TukImage(pic, Modifier.size(56.dp), shape = PictureShapes.forKey(name))
         Column {
             Text(name, style = MaterialTheme.typography.titleSmall)
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

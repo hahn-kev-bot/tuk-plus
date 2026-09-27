@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +41,7 @@ import app.hahn.tukplus.core.domain.TileAction
 import app.hahn.tukplus.ui.common.CacheAgeChip
 import app.hahn.tukplus.ui.common.ShopCard
 import app.hahn.tukplus.ui.common.SkeletonList
+import app.hahn.tukplus.ui.theme.TukIcons
 import kotlinx.coroutines.delay
 
 private val FULFILMENT = listOf("delivery" to R.string.fulfil_delivery, "take-away" to R.string.fulfil_takeaway, "dine-in" to R.string.fulfil_dinein)
@@ -45,23 +49,24 @@ private val SORTS = listOf(EatSort.FOR_YOU to R.string.sort_for_you, EatSort.DIS
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EatScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, viewModel: EatViewModel = hiltViewModel()) {
+fun EatScreen(onOpenShop: (String) -> Unit, onOpenSearch: () -> Unit, viewModel: EatViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { viewModel.onLocationPermission(it) }
     val query = state.query
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
-            Text(stringResource(R.string.eat_title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.eat_title), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
             CacheAgeChip(state.status, onRefresh = viewModel::refresh)
+            IconButton(onClick = onOpenSearch) { Icon(TukIcons.Search, contentDescription = stringResource(R.string.search_hint)) }
         }
         OutlinedTextField(
             value = query.text,
             onValueChange = viewModel::setText,
             placeholder = { Text(stringResource(R.string.eat_filter_hint)) },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         )
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
@@ -118,7 +123,7 @@ fun EatScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, viewModel: EatVi
 
 @Composable
 private fun ListTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp))
+    Text(text, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
 }
 
 @Composable

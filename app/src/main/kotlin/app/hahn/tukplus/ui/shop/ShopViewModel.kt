@@ -17,6 +17,8 @@ import app.hahn.tukplus.core.model.Business
 import app.hahn.tukplus.core.model.Menu
 import app.hahn.tukplus.core.model.MenuParser
 import app.hahn.tukplus.core.model.Workflow
+import app.hahn.tukplus.platform.MenuView
+import app.hahn.tukplus.platform.MenuViewPreference
 import app.hahn.tukplus.ui.common.chiangMaiTicker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -44,6 +46,7 @@ data class ShopUiState(
     val sections: List<MenuSection> = emptyList(),
     val preface: String? = null,
     val menuSearch: String = "",
+    val view: MenuView = MenuView.LIST,
     val status: Cached<Unit> = Cached.empty(),
     /** The handle or id does not lead to a shop. */
     val notFound: Boolean = false,
@@ -56,6 +59,7 @@ class ShopViewModel @Inject constructor(
     browse: BrowseRepository,
     private val shops: ShopRepository,
     private val recent: RecentShops,
+    private val menuView: MenuViewPreference,
     clock: Clock,
     private val log: TukLog,
 ) : ViewModel() {
@@ -100,7 +104,9 @@ class ShopViewModel @Inject constructor(
         cached to commerce?.let(MenuParser::parse)
     }
 
-    val state: StateFlow<ShopUiState> = combine(business, menu, menuSearch, chiangMaiTicker(clock), notFound) { b, (menuCached, parsed), search, now, missing ->
+    private val searchAndView = combine(menuSearch, menuView.view) { search, view -> search to view }
+
+    val state: StateFlow<ShopUiState> = combine(business, menu, searchAndView, chiangMaiTicker(clock), notFound) { b, (menuCached, parsed), (search, view), now, missing ->
         val shop = b.data
         val visible = parsed?.let { MenuRules.visibleEntries(it, now) }.orEmpty()
         val filtered = if (search.isBlank()) visible else visible.filter { MenuRules.matches(it, search) }
@@ -112,6 +118,7 @@ class ShopViewModel @Inject constructor(
             sections = parsed?.let { MenuRules.sections(it, filtered) }.orEmpty(),
             preface = parsed?.preface?.let { (it["en"] as? JsonPrimitive)?.contentOrNull ?: (it["preface"] as? JsonPrimitive)?.contentOrNull },
             menuSearch = search,
+            view = view,
             status = Cached.combineStatus(listOf(menuCached)),
             notFound = missing,
         )
@@ -128,6 +135,11 @@ class ShopViewModel @Inject constructor(
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ShopUiState(menuSearch = menuSearch.value))
+
+    fun setView(view: MenuView) {
+        log.i("ui", "menu_view", "view" to view.name)
+        menuView.set(view)
+    }
 
     fun setMenuSearch(text: String) {
         menuSearch.value = text

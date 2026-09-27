@@ -4,14 +4,16 @@ The app does not copy the Tuk web app's look. It uses Material You (Material 3,
 with the Expressive shapes). The mockup is the "Tuk plus redesign" design page
 (private to the owner): https://claude.ai/artifact/NLToekJrXxshZxYSi2RSsy
 
-Status: mockup under review. The phase 1 screens still use the default Material 3
-theme. The new design goes into the app after the owner approves the mockup.
+Status: locked and built into the app (Home, Shops list, Search, Shop menu with
+list and grid views, Item sheet, bottom navigation). The four phone screens on the
+design page still show the earlier Kingfisher colors; the palette board shows the
+chosen Lorikeet colors.
 
 ## Decisions
 
 | Topic | Decision |
 |---|---|
-| Colors | A vibrant tropical-bird palette. The owner picks one of three options on the design page (A electric kingfisher, B rainbow lorikeet, C toucan). Not green (too much like Grab), not Tuk yellow. The tokens below are the earlier, calmer kingfisher palette and will be replaced. |
+| Colors | "Rainbow lorikeet": electric violet-blue main color, lime for selected chips and the navigation indicator, orange for badges. Chosen from three vibrant tropical-bird options. Not green (too much like Grab), not Tuk yellow. |
 | Dynamic color | Off. The app always uses its own palette, not the Android wallpaper colors. |
 | Shapes | A mix of shapes: round-cornered squares, circles, "leaf" (two large and two small corners) and "arch" (round top). The shapes vary on cuisine tiles, shop pictures and menu item pictures. |
 | Type | Bricolage Grotesque for headings, Figtree for text. |
@@ -20,25 +22,28 @@ theme. The new design goes into the app after the owner approves the mockup.
 | Menu layout | The user switches between a list view and a photo grid view on the shop page. The app remembers the choice. |
 | Data age | Each screen shows the age of its data in a small chip ("Updated 3 min ago"). A tap refreshes. |
 
-## Color tokens (light)
+## Color tokens
 
-| Role | Color |
-|---|---|
-| primary / onPrimary | `#0B5FA8` / `#FFFFFF` |
-| primaryContainer / onPrimaryContainer | `#D3E4FF` / `#001C38` |
-| secondaryContainer / onSecondaryContainer | `#D7E3F8` / `#101C2B` |
-| tertiary (accent) | `#9C4400` |
-| tertiaryContainer / onTertiaryContainer | `#FFDBC8` / `#331200` |
-| surface / onSurface | `#F8F9FF` / `#191C20` |
-| surfaceContainerLow / Container / High / Highest | `#F2F3FA` / `#ECEEF4` / `#E6E8EE` / `#E1E2E8` |
-| onSurfaceVariant | `#43474E` |
-| outline / outlineVariant | `#73777F` / `#C3C6CF` |
-| error | `#BA1A1A` |
+Source: `app/src/main/kotlin/app/hahn/tukplus/ui/theme/Theme.kt`.
 
-The dark scheme comes from the same seed when the design goes into the app.
+| Role | Light | Dark |
+|---|---|---|
+| primary / onPrimary | `#4B2BE8` / `#FFFFFF` | `#C6BFFF` / `#2A0B9E` |
+| primaryContainer / onPrimaryContainer | `#E4DFFF` / `#170065` | `#4B2BE8` / `#FFFFFF` |
+| secondaryContainer / onSecondaryContainer (lime) | `#B8F23A` / `#1B2600` | `#B8F23A` / `#1B2600` |
+| tertiary (orange text) | `#A33A00` | `#FFB596` |
+| tertiaryContainer / onTertiaryContainer (orange badges) | `#FF6B2C` / `#2A0B00` | `#FF6B2C` / `#2A0B00` |
+| surface / onSurface | `#FBF8FF` / `#1B1A24` | `#13121B` / `#E5E1EE` |
+| surfaceContainerLow / Container / High / Highest | `#F5F2FC` / `#F0ECFA` / `#EAE6F4` / `#E4E1EE` | `#1B1A24` / `#1F1E28` / `#2A2933` / `#35343E` |
+| onSurfaceVariant | `#474554` | `#C9C4D6` |
+| outline / outlineVariant | `#787586` / `#C9C4D6` | `#928F9F` / `#474554` |
+| error | `#BA1A1A` | `#FFB4AB` |
+
+Fonts are bundled in `app/src/main/res/font/` (variable fonts, SIL Open Font
+License; see `docs/licenses/`). Picture shapes: `ui/theme/PictureShapes.kt`.
+Icons: `ui/theme/TukIcons.kt` (line icons from SVG paths, no icon library).
 
 ## Next
 
-1. The owner picks the palette. Then the design is locked.
-2. Build the design into the app (Home, Shop menu with list and grid views, Item sheet).
-3. Other screens (Shops list, cart, checkout, orders, account, dark theme) are designed later.
+- Other screens (cart with the order type choice, checkout, orders, account)
+  are designed when their phases start.

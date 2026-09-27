@@ -12,7 +12,12 @@ object Routes {
     const val SEARCH = "search?q={q}"
     const val SHOP = "shop/{id}?q={q}"
     const val SHOP_HANDLE = "handle/{handle}"
+    const val ORDERS = "orders"
+    const val ACCOUNT = "account"
     const val DEBUG = "debug"
+
+    /** Routes with the bottom navigation bar. */
+    val TOP_LEVEL = setOf(HOME, EAT, ORDERS, ACCOUNT)
 
     fun eat(q: String? = null, preset: String? = null) =
         "eat?q=${Uri.encode(q.orEmpty())}&preset=${Uri.encode(preset.orEmpty())}"

@@ -1,17 +1,22 @@
 package app.hahn.tukplus
 
 import android.content.Intent
-import androidx.core.net.toUri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,26 +24,44 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import app.hahn.tukplus.core.domain.TileAction
 import app.hahn.tukplus.logging.AppLogging
 import app.hahn.tukplus.logging.LogShare
+import app.hahn.tukplus.ui.account.AccountScreen
+import app.hahn.tukplus.ui.account.OrdersScreen
 import app.hahn.tukplus.ui.debug.DebugScreen
-import app.hahn.tukplus.core.domain.TileAction
 import app.hahn.tukplus.ui.eat.EatScreen
 import app.hahn.tukplus.ui.home.HomeScreen
 import app.hahn.tukplus.ui.search.SearchScreen
 import app.hahn.tukplus.ui.shop.ShopScreen
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
+import app.hahn.tukplus.ui.theme.TukIcons
 import app.hahn.tukplus.ui.theme.TukPlusTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
+
+private data class NavTab(val route: String, val label: Int, val icon: ImageVector, val selectedIcon: ImageVector, val go: () -> String)
+
+private val TABS = listOf(
+    NavTab(Routes.HOME, R.string.nav_home, TukIcons.Home, TukIcons.HomeFilled) { Routes.HOME },
+    NavTab(Routes.EAT, R.string.nav_shops, TukIcons.Grid, TukIcons.Grid) { Routes.eat() },
+    NavTab(Routes.ORDERS, R.string.nav_orders, TukIcons.Receipt, TukIcons.Receipt) { Routes.ORDERS },
+    NavTab(Routes.ACCOUNT, R.string.nav_account, TukIcons.Person, TukIcons.Person) { Routes.ACCOUNT },
+)
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -50,31 +73,32 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             TukPlusTheme {
-                Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
-                    val nav = rememberNavController()
-                    // Log each screen change in one place (PLAN.md §9.2).
-                    DisposableEffect(nav) {
-                        val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
-                            logging.log.i("ui", "screen", "name" to destination.route)
-                        }
-                        nav.addOnDestinationChangedListener(listener)
-                        onDispose { nav.removeOnDestinationChangedListener(listener) }
+                val nav = rememberNavController()
+                // Log each screen change in one place (PLAN.md §9.2).
+                DisposableEffect(nav) {
+                    val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
+                        logging.log.i("ui", "screen", "name" to destination.route)
                     }
-                    NavHost(navController = nav, startDestination = Routes.HOME) {
+                    nav.addOnDestinationChangedListener(listener)
+                    onDispose { nav.removeOnDestinationChangedListener(listener) }
+                }
+                val backStack by nav.currentBackStackEntryAsState()
+                val route = backStack?.destination?.route
+                Scaffold(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    bottomBar = { if (route in Routes.TOP_LEVEL) BottomBar(nav, route) },
+                ) { padding ->
+                    NavHost(navController = nav, startDestination = Routes.HOME, modifier = Modifier.padding(padding)) {
                         composable(Routes.HOME) {
                             HomeScreen(
                                 onTileAction = { action -> openTileAction(nav, action) },
                                 onOpenShop = { nav.navigate(Routes.shop(it)) },
-                                onOpenEat = { nav.navigate(Routes.eat()) },
                                 onOpenSearch = { nav.navigate(Routes.search()) },
-                                onOpenDebug = { nav.navigate(Routes.DEBUG) },
+                                onOpenAccount = { goToTab(nav, Routes.ACCOUNT) },
                             )
                         }
-                        composable(
-                            Routes.EAT,
-                            arguments = listOf(optionalArg("q"), optionalArg("preset")),
-                        ) {
-                            EatScreen(onBack = { nav.popBackStack() }, onOpenShop = { nav.navigate(Routes.shop(it)) })
+                        composable(Routes.EAT, arguments = listOf(optionalArg("q"), optionalArg("preset"))) {
+                            EatScreen(onOpenShop = { nav.navigate(Routes.shop(it)) }, onOpenSearch = { nav.navigate(Routes.search()) })
                         }
                         composable(Routes.SEARCH, arguments = listOf(optionalArg("q"))) {
                             SearchScreen(
@@ -88,16 +112,42 @@ class MainActivity : ComponentActivity() {
                         composable(Routes.SHOP_HANDLE, arguments = listOf(navArgument("handle") { type = NavType.StringType })) {
                             ShopScreen(onBack = { nav.popBackStack() })
                         }
+                        composable(Routes.ORDERS) { OrdersScreen() }
+                        composable(Routes.ACCOUNT) { AccountScreen(onOpenDebug = { nav.navigate(Routes.DEBUG) }) }
                         composable(Routes.DEBUG) { DebugScreen(onBack = { nav.popBackStack() }) }
                     }
-                    CrashPrompt()
                 }
+                CrashPrompt()
             }
         }
     }
 
-    /** What a Home tile does (api-reference §4). */
-    private fun openTileAction(nav: NavController, action: TileAction) {
+    @Composable
+    private fun BottomBar(nav: NavHostController, route: String?) {
+        NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+            for (tab in TABS) {
+                val selected = route == tab.route
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = { if (!selected) goToTab(nav, tab.go()) },
+                    icon = { Icon(if (selected) tab.selectedIcon else tab.icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
+                    label = { Text(stringResource(tab.label)) },
+                )
+            }
+        }
+    }
+
+    /** Opens a top-level tab and keeps one copy of each tab on the back stack. */
+    private fun goToTab(nav: NavHostController, target: String) {
+        nav.navigate(target) {
+            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    /** What a Home tile or quick filter does (api-reference §4). */
+    private fun openTileAction(nav: NavHostController, action: TileAction) {
         logging.log.i("ui", "tile", "action" to action::class.java.simpleName)
         when (action) {
             is TileAction.ShopHandle -> nav.navigate(Routes.shopHandle(action.handle))
@@ -111,7 +161,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /** After a crash, ask the user to share the logs of yesterday and today (PLAN.md §9.1). */
-    @androidx.compose.runtime.Composable
+    @Composable
     private fun CrashPrompt() {
         var show by remember { mutableStateOf(logging.crashedLastTime) }
         val scope = rememberCoroutineScope()

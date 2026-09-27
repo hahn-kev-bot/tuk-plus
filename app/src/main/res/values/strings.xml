@@ -2,12 +2,25 @@
     <string name="app_name">Tuk plus</string>
 
     <string name="back">Back</string>
-    <string name="home_open_debug">Settings → Debug</string>
-    <string name="home_all_shops">All shops</string>
-    <string name="home_recent">Recent</string>
+    <string name="close">Close</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_shops">Shops</string>
+    <string name="nav_orders">Orders</string>
+    <string name="nav_account">Account</string>
+    <string name="orders_later">Your orders will show here. Ordering comes in a later version of Tuk plus.</string>
+    <string name="account_later">Login comes in a later version of Tuk plus.</string>
+    <string name="account_debug">Debug and logs</string>
+    <string name="home_area">Chiang Mai</string>
+    <string name="home_headline">What are you craving?</string>
+    <string name="home_whats_hot">What\'s hot</string>
+    <string name="quick_buy1get1">Buy 1 get 1</string>
+    <string name="quick_15_off">15% off</string>
+    <string name="quick_free_delivery">Free delivery</string>
+    <string name="quick_vegan">Vegan</string>
+    <string name="home_recent">Order again</string>
     <string name="home_new_shops">New on TUK</string>
-    <string name="home_top_eats">Top eats</string>
-    <string name="search_hint">Search food or shops</string>
+    <string name="home_top_eats">Picked for you</string>
+    <string name="search_hint">Search dishes or shops</string>
 
     <!-- Cache age chip (PLAN.md §5.1) -->
     <string name="age_now">now</string>
@@ -72,8 +85,23 @@
     <string name="option_any">Choose any</string>
     <string name="option_exactly">Choose %1$d</string>
     <string name="option_up_to">Choose up to %1$d</string>
-    <string name="option_required">Required · %1$s</string>
-    <string name="ordering_later">Ordering in Tuk plus comes in the next version.</string>
+    <string name="ordering_later">The cart comes in the next version of Tuk plus.</string>
+    <string name="shop_pay_with_cash">Pay by PromptPay, bank transfer or cash</string>
+    <string name="shop_pay_no_cash">Pay by PromptPay or bank transfer</string>
+    <string name="shop_menu_updated">Menu updated %1$s ago</string>
+    <string name="shop_menu_offline">Offline – menu from %1$s ago</string>
+    <string name="menu_view_list">List view</string>
+    <string name="menu_view_grid">Grid view</string>
+    <string name="menu_choose_options">Choose options</string>
+    <string name="menu_extras">Extras available</string>
+    <string name="option_badge_required">Required</string>
+    <string name="option_badge_optional">Optional</string>
+    <string name="option_free">Free</string>
+    <string name="item_note">Note for the shop</string>
+    <string name="item_note_hint">For example: no chili, please</string>
+    <string name="item_less">One less</string>
+    <string name="item_more">One more</string>
+    <string name="item_add">Add to cart · %1$s</string>
 
     <string name="debug_title">Debug</string>
     <string name="debug_back">Back</string>

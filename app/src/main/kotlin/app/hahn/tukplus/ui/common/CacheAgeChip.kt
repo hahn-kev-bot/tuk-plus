@@ -1,9 +1,16 @@
 package app.hahn.tukplus.ui.common
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import app.hahn.tukplus.ui.theme.TukIcons
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,17 +68,20 @@ fun CacheAgeChip(cached: Cached<*>, onRefresh: () -> Unit, modifier: Modifier = 
         else -> stringResource(R.string.cache_updated, ageText(age))
     }
     val isProblem = status is Cached.Status.Error
-    AssistChip(
+    Surface(
         onClick = onRefresh,
-        label = { Text(text, style = MaterialTheme.typography.labelMedium) },
-        modifier = modifier.padding(vertical = 2.dp),
-        colors = if (isProblem) {
-            AssistChipDefaults.assistChipColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                labelColor = MaterialTheme.colorScheme.onErrorContainer,
-            )
-        } else {
-            AssistChipDefaults.assistChipColors()
-        },
-    )
+        shape = RoundedCornerShape(16.dp),
+        color = if (isProblem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = if (isProblem) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    ) {
+        Row(
+            Modifier.height(32.dp).padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(TukIcons.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+            Text(text, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        }
+    }
 }
