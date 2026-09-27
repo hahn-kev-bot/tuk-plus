@@ -19,7 +19,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +60,7 @@ import app.hahn.tukplus.core.domain.OpenState
 import app.hahn.tukplus.core.model.Menu
 import app.hahn.tukplus.core.model.MenuEntry
 import app.hahn.tukplus.platform.MenuView
+import app.hahn.tukplus.ui.cart.CartBar
 import app.hahn.tukplus.ui.common.Badge
 import app.hahn.tukplus.ui.common.PriceText
 import app.hahn.tukplus.ui.common.SkeletonList
@@ -82,8 +85,11 @@ private const val HEADER_ITEMS = 3
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ShopScreen(onBack: () -> Unit, viewModel: ShopViewModel = hiltViewModel()) {
+fun ShopScreen(onBack: () -> Unit, onOpenCart: () -> Unit, viewModel: ShopViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val cart by viewModel.cart.collectAsStateWithLifecycle()
+    val pendingAdd by viewModel.pendingAdd.collectAsStateWithLifecycle()
+    val cartHere = cart?.takeIf { it.businessId == state.business?.id }
     var selected by remember { mutableStateOf<MenuEntry?>(null) }
     var searchOpen by remember { mutableStateOf(state.menuSearch.isNotBlank()) }
     val listState = rememberLazyListState()
@@ -119,7 +125,7 @@ fun ShopScreen(onBack: () -> Unit, viewModel: ShopViewModel = hiltViewModel()) {
         onRefresh = viewModel::refresh,
         modifier = Modifier.fillMaxSize(),
     ) {
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = if (cartHere != null) 104.dp else 32.dp)) {
             item(key = "photo") { HeroPhoto(state, onBack, onSearch = { searchOpen = !searchOpen }) }
             item(key = "info") { InfoSheet(state, onRefresh = viewModel::refresh) }
             item(key = "search") {
@@ -155,6 +161,17 @@ fun ShopScreen(onBack: () -> Unit, viewModel: ShopViewModel = hiltViewModel()) {
                 else -> state.sections.forEach { section -> menuSection(section, state.menu!!, state.view) { selected = it } }
             }
         }
+        cartHere?.let { CartBar(it, showShop = false, onClick = onOpenCart, modifier = Modifier.align(Alignment.BottomCenter)) }
+    }
+
+    pendingAdd?.let { pending ->
+        AlertDialog(
+            onDismissRequest = viewModel::keepOldCart,
+            title = { Text(stringResource(R.string.cart_new_title)) },
+            text = { Text(stringResource(R.string.cart_new_text, pending.otherShop)) },
+            confirmButton = { TextButton(onClick = viewModel::startNewCart) { Text(stringResource(R.string.cart_new_yes)) } },
+            dismissButton = { TextButton(onClick = viewModel::keepOldCart) { Text(stringResource(R.string.cart_new_no)) } },
+        )
     }
 
     val entry = selected
@@ -163,7 +180,12 @@ fun ShopScreen(onBack: () -> Unit, viewModel: ShopViewModel = hiltViewModel()) {
         ModalBottomSheet(
             onDismissRequest = { selected = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        ) { ItemSheet(entry, menu, onClose = { selected = null }) }
+        ) {
+            ItemSheet(entry, menu, onClose = { selected = null }, onAdd = { addition ->
+                selected = null
+                viewModel.addToCart(addition)
+            })
+        }
     }
 }
 

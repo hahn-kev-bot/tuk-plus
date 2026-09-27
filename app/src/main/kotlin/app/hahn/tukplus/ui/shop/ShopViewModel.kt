@@ -5,7 +5,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.hahn.tukplus.core.data.BrowseRepository
+import app.hahn.tukplus.core.data.CartStore
 import app.hahn.tukplus.core.data.Cached
+import app.hahn.tukplus.core.domain.AddResult
+import app.hahn.tukplus.core.domain.Cart
+import app.hahn.tukplus.core.domain.CartAddition
+import app.hahn.tukplus.core.domain.CartRules
 import app.hahn.tukplus.core.data.RecentShops
 import app.hahn.tukplus.core.data.ShopRepository
 import app.hahn.tukplus.core.domain.MenuRules
@@ -36,6 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import java.time.Clock
+import java.util.UUID
 import javax.inject.Inject
 
 data class ShopUiState(
@@ -52,6 +58,9 @@ data class ShopUiState(
     val notFound: Boolean = false,
 )
 
+/** An item to add after the user answers "Start a new cart?". [otherShop] is the shop of the current cart. */
+data class PendingAdd(val addition: CartAddition, val otherShop: String)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ShopViewModel @Inject constructor(
@@ -60,9 +69,17 @@ class ShopViewModel @Inject constructor(
     private val shops: ShopRepository,
     private val recent: RecentShops,
     private val menuView: MenuViewPreference,
-    clock: Clock,
+    private val cartStore: CartStore,
+    private val clock: Clock,
     private val log: TukLog,
 ) : ViewModel() {
+    /** The cart of the device. The shop screen shows the "View cart" bar when it is for this shop. */
+    val cart: StateFlow<Cart?> = cartStore.cart
+
+    /** An item that waits for the answer to "Start a new cart?". */
+    private val _pendingAdd = MutableStateFlow<PendingAdd?>(null)
+    val pendingAdd: StateFlow<PendingAdd?> = _pendingAdd
+
     private val businessId = MutableStateFlow(savedState.get<String>("id"))
     private val notFound = MutableStateFlow(false)
     private val menuSearch = MutableStateFlow(savedState.get<String>("q").orEmpty())
@@ -102,6 +119,9 @@ class ShopViewModel @Inject constructor(
             shops.fleet(wf.id).start()
         }
         cached to commerce?.let(MenuParser::parse)
+    }.onEach { (_, parsed) ->
+        // A newer menu can change the prices or remove items of the cart (PLAN.md §5.7).
+        parsed?.let(cartStore::reconcile)
     }
 
     private val searchAndView = combine(menuSearch, menuView.view) { search, view -> search to view }
@@ -144,6 +164,57 @@ class ShopViewModel @Inject constructor(
     fun setMenuSearch(text: String) {
         menuSearch.value = text
     }
+
+    fun addToCart(addition: CartAddition) {
+        val id = businessId.value ?: return
+        val menu = state.value.menu ?: return
+        val name = state.value.business?.name.orEmpty()
+        var other: Cart? = null
+        cartStore.update { cart ->
+            when (val result = CartRules.add(cart, id, name, menu, addition, clock.millis(), ::newLineId)) {
+                is AddResult.Added -> result.cart
+                is AddResult.OtherShop -> {
+                    other = result.current
+                    cart
+                }
+            }
+        }
+        val current = other
+        if (current != null) {
+            log.i("cart", "other_shop", "business_id" to id)
+            _pendingAdd.value = PendingAdd(addition, current.shopName)
+        } else {
+            logAdd(id, addition)
+        }
+    }
+
+    /** The user said yes to "Start a new cart?". */
+    fun startNewCart() {
+        val pending = _pendingAdd.value ?: return
+        _pendingAdd.value = null
+        val id = businessId.value ?: return
+        val menu = state.value.menu ?: return
+        cartStore.clear()
+        cartStore.update { CartRules.startNew(id, state.value.business?.name.orEmpty(), menu, pending.addition, clock.millis(), ::newLineId) }
+        logAdd(id, pending.addition)
+    }
+
+    fun keepOldCart() {
+        _pendingAdd.value = null
+    }
+
+    private fun logAdd(businessId: String, addition: CartAddition) {
+        log.i(
+            "cart", "add",
+            "business_id" to businessId,
+            "item_id" to addition.entry.item.id,
+            "quantity" to addition.quantity,
+            "options" to addition.options.size,
+            "lines" to cartStore.cart.value?.lines?.size,
+        )
+    }
+
+    private fun newLineId(): String = UUID.randomUUID().toString()
 
     fun refresh() {
         val id = businessId.value ?: return

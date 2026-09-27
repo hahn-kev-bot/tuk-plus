@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,11 +38,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.hahn.tukplus.core.data.CartStore
 import app.hahn.tukplus.core.domain.TileAction
 import app.hahn.tukplus.logging.AppLogging
 import app.hahn.tukplus.logging.LogShare
 import app.hahn.tukplus.ui.account.AccountScreen
 import app.hahn.tukplus.ui.account.OrdersScreen
+import app.hahn.tukplus.ui.cart.CartBar
+import app.hahn.tukplus.ui.cart.CartScreen
 import app.hahn.tukplus.ui.debug.DebugScreen
 import app.hahn.tukplus.ui.eat.EatScreen
 import app.hahn.tukplus.ui.home.HomeScreen
@@ -67,6 +72,7 @@ private val TABS = listOf(
 class MainActivity : ComponentActivity() {
     @Inject lateinit var logging: AppLogging
     @Inject lateinit var logShare: LogShare
+    @Inject lateinit var cartStore: CartStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,9 +90,17 @@ class MainActivity : ComponentActivity() {
                 }
                 val backStack by nav.currentBackStackEntryAsState()
                 val route = backStack?.destination?.route
+                val cart by cartStore.cart.collectAsStateWithLifecycle()
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    bottomBar = { if (route in Routes.TOP_LEVEL) BottomBar(nav, route) },
+                    bottomBar = {
+                        if (route in Routes.TOP_LEVEL) {
+                            Column {
+                                cart?.let { CartBar(it, showShop = true, onClick = { nav.navigate(Routes.CART) }) }
+                                BottomBar(nav, route)
+                            }
+                        }
+                    },
                 ) { padding ->
                     NavHost(navController = nav, startDestination = Routes.HOME, modifier = Modifier.padding(padding)) {
                         composable(Routes.HOME) {
@@ -107,10 +121,13 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(Routes.SHOP, arguments = listOf(navArgument("id") { type = NavType.StringType }, optionalArg("q"))) {
-                            ShopScreen(onBack = { nav.popBackStack() })
+                            ShopScreen(onBack = { nav.popBackStack() }, onOpenCart = { nav.navigate(Routes.CART) })
                         }
                         composable(Routes.SHOP_HANDLE, arguments = listOf(navArgument("handle") { type = NavType.StringType })) {
-                            ShopScreen(onBack = { nav.popBackStack() })
+                            ShopScreen(onBack = { nav.popBackStack() }, onOpenCart = { nav.navigate(Routes.CART) })
+                        }
+                        composable(Routes.CART) {
+                            CartScreen(onBack = { nav.popBackStack() }, onOpenShop = { id -> openShopFromCart(nav, id) })
                         }
                         composable(Routes.ORDERS) { OrdersScreen() }
                         composable(Routes.ACCOUNT) { AccountScreen(onOpenDebug = { nav.navigate(Routes.DEBUG) }) }
@@ -154,6 +171,13 @@ class MainActivity : ComponentActivity() {
             launchSingleTop = true
             restoreState = true
         }
+    }
+
+    /** "Add more" in the cart: back to the shop if the cart was opened from it, else open the shop. */
+    private fun openShopFromCart(nav: NavHostController, businessId: String) {
+        val previous = nav.previousBackStackEntry
+        val fromShop = previous?.destination?.route in setOf(Routes.SHOP, Routes.SHOP_HANDLE)
+        if (fromShop) nav.popBackStack() else nav.navigate(Routes.shop(businessId)) { popUpTo(Routes.CART) { inclusive = true } }
     }
 
     /** What a Home tile or quick filter does (api-reference §4). */

@@ -15,6 +15,7 @@ object Routes {
     const val ORDERS = "orders"
     const val ACCOUNT = "account"
     const val DEBUG = "debug"
+    const val CART = "cart"
 
     /** Routes with the bottom navigation bar. */
     val TOP_LEVEL = setOf(HOME, EAT, ORDERS, ACCOUNT)

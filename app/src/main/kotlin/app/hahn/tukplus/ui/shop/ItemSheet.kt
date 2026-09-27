@@ -1,6 +1,5 @@
 package app.hahn.tukplus.ui.shop
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,12 +35,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.hahn.tukplus.R
+import app.hahn.tukplus.core.domain.CartAddition
+import app.hahn.tukplus.core.domain.CartRules
 import app.hahn.tukplus.core.domain.MenuRules
 import app.hahn.tukplus.core.domain.OptionChoice
 import app.hahn.tukplus.core.domain.OptionStyle
@@ -56,16 +56,13 @@ import app.hahn.tukplus.ui.theme.PictureShapes
 import app.hahn.tukplus.ui.theme.TukIcons
 
 /**
- * Item details with option groups (design: Item). The user can already choose options
- * and a quantity. The cart comes in phase 2, so "Add to cart" only says that for now.
- * The total here is a preview; the exact price rules (discounts on options, VAT) come
- * with `core/pricing` in phase 2.
+ * Item details with option groups (design: Item). "Add to cart" gives the chosen options,
+ * the quantity and the note to [onAdd].
  */
 @Composable
-fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit) {
+fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit, onAdd: (CartAddition) -> Unit) {
     val item = entry.item
     val colors = MaterialTheme.colorScheme
-    val context = LocalContext.current
     val groups = menu.groupsFor(item)
     // Selected option ids per option group (blob id).
     val chosen = remember(item.id) { mutableStateMapOf<String, Set<String>>() }
@@ -76,7 +73,6 @@ fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit) {
         group.group.items.filter { it.id in chosen[group.blobId].orEmpty() }.sumOf { it.price?.let(::parseIntLikeJavaScript) ?: 0 }
     }
     val missingRequired = groups.any { OptionChoice.isMissing(it.group, chosen[it.blobId].orEmpty()) }
-    val addToCartLater = stringResource(R.string.ordering_later)
 
     Column(Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
@@ -116,13 +112,13 @@ fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit) {
                             Icon(TukIcons.Minus, contentDescription = stringResource(R.string.item_less))
                         }
                         Text(quantity.toString(), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center, modifier = Modifier.width(28.dp))
-                        IconButton(onClick = { quantity++ }, modifier = Modifier.size(52.dp, 56.dp)) {
+                        IconButton(onClick = { if (quantity < CartRules.MAX_QUANTITY) quantity++ }, modifier = Modifier.size(52.dp, 56.dp)) {
                             Icon(TukIcons.Plus, contentDescription = stringResource(R.string.item_more))
                         }
                     }
                 }
                 Button(
-                    onClick = { Toast.makeText(context, addToCartLater, Toast.LENGTH_SHORT).show() },
+                    onClick = { onAdd(CartAddition(entry, CartRules.options(groups, chosen), quantity, note)) },
                     enabled = !missingRequired && item.outOfStock != true,
                     shape = RoundedCornerShape(28.dp),
                     modifier = Modifier.weight(1f).height(56.dp),

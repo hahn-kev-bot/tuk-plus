@@ -37,6 +37,8 @@ object TukIcons {
     val HomeFilled = icon("home_filled", "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z", filled = true, strokeWidth = 1.6f)
     val Grid = icon("grid", "M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z")
     val List = icon("list", "M9 6h11M9 12h11M9 18h11", "M4 6h.01M4 12h.01M4 18h.01", strokeWidth = 2.2f)
+    val Cart = icon("cart", "M5 8h14l-1.2 11a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z", "M9 8V6a3 3 0 0 1 6 0v2")
+    val Trash = icon("trash", "M4 7h16", "M10 11v6M14 11v6", "M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12", "M9 7V4h6v3")
     val Receipt = icon("receipt", "M6 3h12v18l-3-2-3 2-3-2-3 2z", "M9 8h6M9 12h6")
     val Back = icon("back", "M19 12H5", "M11 18l-6-6 6-6", strokeWidth = 2.2f)
     val Close = icon("close", "M6 6l12 12M18 6L6 18", strokeWidth = 2.2f)

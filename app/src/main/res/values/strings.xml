@@ -85,7 +85,6 @@
     <string name="option_any">Choose any</string>
     <string name="option_exactly">Choose %1$d</string>
     <string name="option_up_to">Choose up to %1$d</string>
-    <string name="ordering_later">The cart comes in the next version of Tuk plus.</string>
     <string name="shop_pay_with_cash">Pay by PromptPay, bank transfer or cash</string>
     <string name="shop_pay_no_cash">Pay by PromptPay or bank transfer</string>
     <string name="shop_menu_updated">Menu updated %1$s ago</string>
@@ -124,4 +123,46 @@
     <string name="crash_text">The app stopped unexpectedly last time. Do you want to share the logs?</string>
     <string name="crash_share">Share logs</string>
     <string name="crash_not_now">Not now</string>
+
+    <!-- Cart -->
+    <string name="cart_view">View cart</string>
+    <plurals name="cart_items">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <string name="cart_title">Your cart</string>
+    <string name="cart_empty">Your cart is empty.</string>
+    <string name="cart_empty_hint">Open a shop and add some food.</string>
+    <string name="cart_new_title">Start a new cart?</string>
+    <string name="cart_new_text">Your cart has items from %1$s. A cart can have items from one shop only. A new cart removes these items.</string>
+    <string name="cart_new_yes">New cart</string>
+    <string name="cart_new_no">Keep old cart</string>
+    <string name="cart_add_more">Add more</string>
+    <string name="cart_remove">Remove</string>
+    <string name="cart_clear">Empty cart</string>
+    <string name="cart_clear_title">Empty the cart?</string>
+    <string name="cart_clear_text">All items are removed from the cart.</string>
+    <string name="cart_order_type">Order type</string>
+    <string name="cart_order_note">Note for the shop</string>
+    <string name="cart_order_note_hint">For example: no plastic spoons</string>
+    <string name="cart_blocked_sold_out">Sold out now. Remove it to continue.</string>
+    <string name="cart_blocked_option">%1$s is not available now. Remove this item to continue.</string>
+    <string name="cart_changes_title">The menu changed</string>
+    <string name="cart_change_removed">%1$s is no longer on the menu. It was removed.</string>
+    <string name="cart_change_sold_out">%1$s is sold out.</string>
+    <string name="cart_change_option">%1$s: %2$s is not available.</string>
+    <string name="cart_change_price">%1$s now costs %3$s (was %2$s).</string>
+    <string name="cart_changes_ok">OK</string>
+    <string name="cart_items_total">Items</string>
+    <string name="cart_subtotal">Subtotal</string>
+    <string name="cart_vat">VAT</string>
+    <string name="cart_discount">Discount</string>
+    <string name="cart_delivery_fee">Delivery</string>
+    <string name="cart_delivery_free">Free</string>
+    <string name="cart_delivery_at_checkout">At checkout</string>
+    <string name="cart_total">Total</string>
+    <string name="cart_min_order">The shop delivers orders of %1$s or more. Add %2$s more for delivery.</string>
+    <string name="cart_checkout">Checkout · %1$s</string>
+    <string name="cart_checkout_later">Checkout comes in a later version of Tuk plus.</string>
+    <string name="cart_shop_closed">The shop is closed now.</string>
 </resources>

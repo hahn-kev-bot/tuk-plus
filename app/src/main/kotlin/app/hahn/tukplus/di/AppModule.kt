@@ -5,6 +5,7 @@ import app.hahn.tukplus.BuildConfig
 import app.hahn.tukplus.core.data.BrowseRepository
 import app.hahn.tukplus.core.data.FileResponseCache
 import app.hahn.tukplus.core.data.Prefetcher
+import app.hahn.tukplus.core.data.CartStore
 import app.hahn.tukplus.core.data.RecentShops
 import app.hahn.tukplus.core.data.ResourceStore
 import app.hahn.tukplus.core.data.SearchRepository
@@ -106,6 +107,10 @@ object AppModule {
     @Provides
     @Singleton
     fun recentShops(@ApplicationContext context: Context) = RecentShops(File(context.filesDir, "recent_shops.txt"))
+
+    @Provides
+    @Singleton
+    fun cartStore(@ApplicationContext context: Context, log: TukLog) = CartStore(File(context.filesDir, "cart/cart.json"), log)
 
     @Provides
     @Singleton
