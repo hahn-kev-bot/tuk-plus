@@ -18,6 +18,8 @@ rootProject.name = "tuk-plus"
 
 include(":app")
 include(":core:model")
+include(":core:domain")
 include(":core:network")
 include(":core:logging")
+include(":core:data")
 include(":tools:api-probe")

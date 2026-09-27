@@ -14,7 +14,7 @@ import app.hahn.tukplus.core.model.WorkflowData
 import app.hahn.tukplus.core.model.BusinessData
 import app.hahn.tukplus.core.network.ApiResult
 import app.hahn.tukplus.core.network.DeviceUuid
-import app.hahn.tukplus.core.network.LatLon
+import app.hahn.tukplus.core.model.LatLon
 import app.hahn.tukplus.core.network.TukApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

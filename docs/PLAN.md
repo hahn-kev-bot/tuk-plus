@@ -50,7 +50,7 @@ card payment (Stripe), shop and driver screens, LINE/Facebook/Apple login.
 | Architecture | MVVM + unidirectional data flow; repositories expose `Flow<Cached<T>>` |
 | DI | Hilt |
 | Network | OkHttp + kotlinx.serialization, with a small own client (`TukApi`). No Retrofit: the API mixes JSON, plain text, `null` bodies and HTTP 500 answers that are not errors, and a thin client handles this more simply. |
-| Local cache | Room (SQLite) |
+| Local cache | API responses: raw JSON files (`FileResponseCache`, see docs/phases/phase-1.md). Cart and orders: Room (phase 2+) |
 | Settings / session | DataStore; user id in EncryptedSharedPreferences or Tink |
 | Images | Coil 3 with a large disk cache |
 | Background work | WorkManager |
@@ -84,7 +84,10 @@ tools/api-probe/          JVM command-line tool, run manually: calls the live re
 code. We can test them fast on the JVM, and `tools/api-probe` can use them.
 
 Phase 0 made `app`, `core/model`, `core/network`, `core/logging` and
-`tools/api-probe`. The other modules come with the phase that needs them.
+`tools/api-probe`. Phase 1 added `core/domain` (browse logic: hours, filters,
+search, menu rules) and `core/data` (cache and repositories). The screens are
+packages in `app` (`ui/home`, `ui/eat`, `ui/search`, `ui/shop`) while the app is
+small. Other modules come with the phase that needs them.
 
 ## 5. Speed and caching design
 
@@ -241,12 +244,13 @@ Payment happens outside the app. The app shows:
 
 ## 8. Phases
 
-Each phase ends with a build that works.
+Each phase ends with a build that works. Each phase gets a detailed
+specification in [docs/phases/](phases/README.md) when it starts.
 
 | Phase | Content | Done when |
 |---|---|---|
 | 0. Foundations ✅ | Gradle project, modules, CI (build, lint, unit tests). Session logger (§9). `tools/api-probe` that calls the live read-only endpoints and checks our models. Record JSON fixtures. | The probe parses all Chiang Mai eateries and 25+ menus without errors. Logs export works. |
-| 1. Browse (no login) | Home, Eat list, Search, Shop menu. Room cache, `Cached<T>`, age chip, prefetch. | Cold start shows Home in < 1 s from cache. Shop opens at once from cache. |
+| 1. Browse (no login) ✅ built, [spec](phases/phase-1.md) | Home, Eat list, Search, Shop menu. Response cache, `Cached<T>`, age chip, prefetch. | Cold start shows Home in < 1 s from cache. Shop opens at once from cache. |
 | 2. Cart and pricing | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in Room. | Unit tests match the web app results for every recorded menu (see §10). |
 | 3. Account | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
 | 4. Checkout | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. Web checkout fallback (§8a) with the background order check. | The owner places a real order in Tuk plus, and one with the fallback. The shop sees correct items and totals. The check logs its result. |

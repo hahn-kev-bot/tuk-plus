@@ -53,7 +53,7 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":core:network"))
+    implementation(project(":core:data"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -62,6 +62,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

@@ -1,91 +1,147 @@
 package app.hahn.tukplus.ui.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import app.hahn.tukplus.R
-import app.hahn.tukplus.core.logging.TukLog
-import app.hahn.tukplus.core.network.ApiResult
-import app.hahn.tukplus.core.network.TukApi
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
-import javax.inject.Inject
+import app.hahn.tukplus.core.data.Cached
+import app.hahn.tukplus.core.domain.TileAction
+import app.hahn.tukplus.core.domain.TileActions
+import app.hahn.tukplus.core.model.PageRow
+import app.hahn.tukplus.core.model.PageTile
+import app.hahn.tukplus.ui.common.CacheAgeChip
+import app.hahn.tukplus.ui.common.ShopCard
+import app.hahn.tukplus.ui.common.SkeletonList
+import app.hahn.tukplus.ui.common.TukImage
 
-sealed interface BackendState {
-    data object Checking : BackendState
-    data class Ok(val version: String, val ms: Long) : BackendState
-    data class Error(val message: String) : BackendState
-}
-
-/** Phase 0 home: checks that the Tuk API answers. Phase 1 replaces this screen. */
-@HiltViewModel
-class HomeViewModel @Inject constructor(
-    private val api: TukApi,
-    private val log: TukLog,
-) : ViewModel() {
-    private val _backend = MutableStateFlow<BackendState>(BackendState.Checking)
-    val backend: StateFlow<BackendState> = _backend
-
-    init {
-        check()
-    }
-
-    fun check() {
-        _backend.value = BackendState.Checking
-        viewModelScope.launch {
-            _backend.value = when (val result = api.version()) {
-                is ApiResult.Success -> {
-                    log.i("app", "backend_version", "version" to result.value.trim())
-                    BackendState.Ok(result.value.trim(), result.durationMs)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreen(
+    onTileAction: (TileAction) -> Unit,
+    onOpenShop: (String) -> Unit,
+    onOpenEat: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenDebug: () -> Unit,
+    viewModel: HomeViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    PullToRefreshBox(
+        isRefreshing = state.status.status == Cached.Status.Refreshing && !state.isEmpty,
+        onRefresh = viewModel::refresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+            item {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    CacheAgeChip(state.status, onRefresh = viewModel::refresh)
                 }
-                is ApiResult.Failure -> BackendState.Error(result.message)
+            }
+            item {
+                OutlinedCard(
+                    onClick = onOpenSearch,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(24.dp),
+                ) {
+                    Text(stringResource(R.string.search_hint), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            item {
+                Row(Modifier.padding(horizontal = 8.dp)) {
+                    TextButton(onClick = onOpenEat) { Text(stringResource(R.string.home_all_shops)) }
+                    TextButton(onClick = onOpenDebug) { Text(stringResource(R.string.home_open_debug)) }
+                }
+            }
+            if (state.isEmpty && state.status.data == null) {
+                item { SkeletonList() }
+            }
+            if (state.recent.isNotEmpty()) {
+                item { SectionTitle(stringResource(R.string.home_recent)) }
+                item {
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(state.recent, key = { it.business.id }) { item ->
+                            SmallShopTile(item.business.name, item.business.data?.productPicUrl ?: item.business.profilePicUrl) { onOpenShop(item.business.id) }
+                        }
+                    }
+                }
+            }
+            items(state.rows, key = { it.page }) { row -> TileRow(row, onTileAction) }
+            if (state.newShops.isNotEmpty()) {
+                item { SectionTitle(stringResource(R.string.home_new_shops)) }
+                item {
+                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(state.newShops, key = { it.id }) { shop ->
+                            SmallShopTile(shop.name.orEmpty(), shop.productPicUrl ?: shop.profilePicUrl) { onOpenShop(shop.id) }
+                        }
+                    }
+                }
+            }
+            if (state.topEats.isNotEmpty()) {
+                item { SectionTitle(stringResource(R.string.home_top_eats)) }
+                items(state.topEats, key = { "top-" + it.business.id }) { item ->
+                    ShopCard(item, onClick = { onOpenShop(item.business.id) })
+                }
             }
         }
     }
 }
 
 @Composable
-fun HomeScreen(onOpenDebug: () -> Unit, viewModel: HomeViewModel = hiltViewModel()) {
-    val backend by viewModel.backend.collectAsStateWithLifecycle()
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(stringResource(R.string.home_title), style = MaterialTheme.typography.headlineMedium)
-        Text(stringResource(R.string.home_phase), style = MaterialTheme.typography.bodyMedium)
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.home_backend), style = MaterialTheme.typography.titleMedium)
-                Text(
-                    when (val state = backend) {
-                        BackendState.Checking -> stringResource(R.string.home_backend_checking)
-                        is BackendState.Ok -> stringResource(R.string.home_backend_version, state.version, state.ms)
-                        is BackendState.Error -> stringResource(R.string.home_backend_error, state.message)
-                    },
-                )
-                OutlinedButton(onClick = viewModel::check, enabled = backend !is BackendState.Checking) {
-                    Text(stringResource(R.string.home_check_again))
-                }
-            }
+private fun SectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp))
+}
+
+@Composable
+private fun TileRow(row: PageRow, onTileAction: (TileAction) -> Unit) {
+    Column {
+        row.title?.titleFor("en")?.let { SectionTitle(it) }
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(row.tiles, key = { it.id }) { tile -> Tile(tile) { onTileAction(TileActions.parse(tile.tag)) } }
         }
-        Button(onClick = onOpenDebug) { Text(stringResource(R.string.home_open_debug)) }
+    }
+}
+
+@Composable
+private fun Tile(tile: PageTile, onClick: () -> Unit) {
+    Column(Modifier.width(150.dp).clickable(onClick = onClick)) {
+        TukImage(tile.picFor("en"), Modifier.width(150.dp).height(100.dp))
+        if (tile.showName) {
+            Text(tile.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun SmallShopTile(name: String, pic: String?, onClick: () -> Unit) {
+    Column(Modifier.width(96.dp).clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
+        TukImage(pic, Modifier.size(96.dp))
+        Text(name, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }

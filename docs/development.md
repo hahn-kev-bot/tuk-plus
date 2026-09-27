@@ -17,10 +17,12 @@ as the `tukplus-debug-apk` artifact.
 
 | Module | Kind | Content |
 |---|---|---|
-| `app` | Android | Application, screens, DI (Hilt), Android parts of logging (crash handler, share) |
+| `app` | Android | Application, screens (`ui/…`), DI (Hilt), images, location, background refresh, Android parts of logging |
 | `core:model` | Kotlin/JVM | API data classes, lenient serializers, page and menu parsers |
 | `core:network` | Kotlin/JVM | `TukApi` client, interceptors (auth, retry, HTTP log), device uuid |
 | `core:logging` | Kotlin/JVM | Session log, day files, redaction, zip export |
+| `core:domain` | Kotlin/JVM | Browse logic: opening hours, categories, tile actions, shop list filters, search, menu rules |
+| `core:data` | Kotlin/JVM | Response cache, `Cached<T>`, cached resources, repositories, prefetch |
 | `tools:api-probe` | Kotlin/JVM app | Manual check of the live read-only API |
 
 ## Tests
