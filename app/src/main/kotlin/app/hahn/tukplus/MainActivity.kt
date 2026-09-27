@@ -137,8 +137,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Opens a top-level tab and keeps one copy of each tab on the back stack. */
+    /**
+     * Opens a top-level tab and keeps one copy of each tab on the back stack.
+     *
+     * Home is the start screen. Screens that were opened on top of Home (for example a
+     * shop list from a Home filter) are saved under Home's id when the user leaves, so
+     * "restore state" for Home would show them again. So Home only goes back to itself.
+     */
     private fun goToTab(nav: NavHostController, target: String) {
+        if (target == Routes.HOME) {
+            if (!nav.popBackStack(nav.graph.findStartDestination().id, inclusive = false)) nav.navigate(Routes.HOME)
+            return
+        }
         nav.navigate(target) {
             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true

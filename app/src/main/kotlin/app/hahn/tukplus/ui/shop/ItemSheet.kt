@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.hahn.tukplus.R
 import app.hahn.tukplus.core.domain.MenuRules
+import app.hahn.tukplus.core.domain.OptionChoice
 import app.hahn.tukplus.core.model.Menu
 import app.hahn.tukplus.core.model.MenuEntry
 import app.hahn.tukplus.core.model.MenuOptionGroup
@@ -73,7 +74,7 @@ fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit) {
     val unit = (MenuRules.discountedPrice(item) ?: 0) + groups.sumOf { group ->
         group.group.items.filter { it.id in chosen[group.blobId].orEmpty() }.sumOf { it.price?.let(::parseIntLikeJavaScript) ?: 0 }
     }
-    val missingRequired = groups.any { it.group.required == true && chosen[it.blobId].isNullOrEmpty() }
+    val missingRequired = groups.any { OptionChoice.isMissing(it.group, chosen[it.blobId].orEmpty()) }
     val addToCartLater = stringResource(R.string.ordering_later)
 
     Column(Modifier.fillMaxWidth()) {
@@ -136,8 +137,10 @@ fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit) {
 private fun OptionGroupCard(group: MenuOptionGroup, chosen: Set<String>, onChange: (Set<String>) -> Unit) {
     val g = group.group
     val colors = MaterialTheme.colorScheme
-    val single = g.select != "multiple"
-    val limit = if (g.multipleConstraint == "up_to" || g.multipleConstraint == "exactly") g.multipleN else null
+    val single = OptionChoice.isSingle(g)
+    // A required single choice looks like radio buttons. An optional one can be removed
+    // again, so it looks like check boxes (the owner could not unselect "Extra cheese").
+    val radio = single && g.required == true
     Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -163,17 +166,16 @@ private fun OptionGroupCard(group: MenuOptionGroup, chosen: Set<String>, onChang
                 val selected = option.id in chosen
                 val price = option.price?.let(::parseIntLikeJavaScript) ?: 0
                 val priceText = if (price == 0) stringResource(R.string.option_free) else "+" + baht(price)
-                val rowModifier = if (single) {
-                    Modifier.selectable(selected = selected, enabled = !soldOut, role = Role.RadioButton) { onChange(setOf(option.id)) }
+                val enabled = !soldOut && OptionChoice.canAdd(g, chosen, option.id)
+                val rowModifier = if (radio) {
+                    Modifier.selectable(selected = selected, enabled = enabled, role = Role.RadioButton) { onChange(OptionChoice.tap(g, chosen, option.id)) }
                 } else {
-                    Modifier.toggleable(value = selected, enabled = !soldOut && (selected || limit == null || chosen.size < limit), role = Role.Checkbox) {
-                        onChange(if (it) chosen + option.id else chosen - option.id)
-                    }
+                    Modifier.toggleable(value = selected, enabled = enabled, role = Role.Checkbox) { onChange(OptionChoice.tap(g, chosen, option.id)) }
                 }
                 Row(rowModifier.fillMaxWidth().height(52.dp).alpha(if (soldOut) 0.5f else 1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(option.displayName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Text(if (soldOut) stringResource(R.string.sold_out) else priceText, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                    if (single) RadioButton(selected = selected, onClick = null) else Checkbox(checked = selected, onCheckedChange = null)
+                    if (radio) RadioButton(selected = selected, onClick = null) else Checkbox(checked = selected, onCheckedChange = null)
                 }
                 if (index < g.items.lastIndex) HorizontalDivider(color = colors.surfaceContainerHighest)
             }
