@@ -331,48 +331,72 @@ totals and the delivery fare and **sends them** in the order. The native app
 must use the same formulas as the web app, or the shop sees wrong amounts.
 These formulas come from `shop-profile~1c39816d.js` and `app~50b71177.js`.
 
+**The full trace, with sources and JavaScript quirks, is in [pricing.md](pricing.md).**
+This section is a summary. If the two differ, pricing.md is correct.
+
 ```
-discounted(p, item) = discount_type == "number" ? max(0, p - d) : round(p * (1 - d/100))
-optionPrice          = parseInt(option.discounted_price || option.price) * option.quantity
-lineUnit             = discounted(parseInt(item.price)) + Σ optionPrice
+discounted(item)   = !discount ? parseInt(price)
+                     : max(0, Math.round(discount_type == "number" ? parseInt(price) - discount
+                                                                   : parseInt(price) * (1 - discount/100)))
+optionPrice        = parseInt(option.discounted_price || option.price) * (option.quantity || 1)
+lineUnit           = discounted(item) + Σ optionPrice
 subtotal (order_value) = Σ lineUnit * quantity
-vat                  = round(workflow.data.vat * vatable subtotal)
-fulfilment_discount  = take-away / dine-in discount percent of subtotal (if the shop sets one)
+vat                = round(workflow.data.vat * Σ lines without "vatable": false)   (added on top)
+fulfilment_discount = round(pct/100 * subtotal); pct = takeaway_discount (take-away) or dinein_discount (dine-in)
+total              = subtotal + vat - fulfilment_discount + fee (delivery)
 ```
 
 Delivery fare:
 
 ```
-metres  = route distance (GraphHopper, then GET directions, then straight line × 1.25)
+metres  = route distance (GraphHopper, then GET directions, then straight line × 1.25) + user extra_distance
 km      = round(metres / 1000); if km > 0 then km = km - 1
-base    = pricing_array[km]            (fallback fleet wins over express)
-cash    = base + surge
-client  = cash + remit_amount (+ shop and user remit, usually 0)
+base    = pricing_array[km]      (fallback fleet if there is one, else express fleet;
+                                  no fleet: 30/40/60/80 by distance)
+cash    = base + surge + delivery_options.extra_cash
+price   = cash + delivery_options.extra_tukpay
+remit   = fleet remit_amount (express fleet first!) + user remit_amount + workflow.data.delivery_options.remit_amount
+client  = cash + remit
 ```
 
-- Max distance (km) = min(`max_distance`, peak-hour max from 17:00 to 18:59,
-  `pricing_array.length`). Default 14. Reject distances of 50 m or less.
+- Surge and the peak-hour limit also come from the fallback fleet first. Only the fleet
+  remit comes from the express fleet first.
+- The shop remit (`delivery_options.remit_amount`, 0–12 in live data) is common.
+- Max distance (km) = min of the set values of `max_distance`, the peak-hour max
+  (17:00–18:59, device time) and `pricing_array.length`. Default 14. Reject distances of
+  50 m or less, and more than max × 1000 m.
 - `GET directions?origin=lat,lon&destination=lat,lon` → `{"source":"google","distance":4423,"encoded_polyline":"…"}`.
 - `GET delivery/price_check?pickup=lat,lon&dropoff=lat,lon&type=express` →
   `{"driving_distance":3.98,"price":40}`. The web UI does not call it, but it
   agrees with the formula. Use it as a check.
 
-Shop package code `workflow.data.fruit`, for example `r_20_10`:
+Shop package code `workflow.data.fruit` (pricing.md §9–§11):
 
-- First number (20) = Tuk commission percent. Send as `order.remit`. Do not show it.
-- Second number (10) = delivery subsidy percent:
-  `delivery_subsidy = round(0.10 × subtotal)`.
-  Fee shown to the customer = `max(0, client − delivery_subsidy)`.
-  So delivery is free when the subtotal is ≥ `ceil(client / 0.10)`.
-- Other package codes use other rules. We must read these paths in the web code
-  before we support such shops. Codes seen on 2026-09-27 (256 Chiang Mai shops):
-  `r` (220), `p` (12), `f` (10), `apple` (5), `elderberry` (2), `fig` (1),
-  `durian` (1). The web code also knows `thai`.
+- `r_A_B` (for example `r_20_10`): Tuk commission A %, delivery subsidy B %.
+  `delivery_subsidy = min(client, round(B% × subtotal))`.
+  Fee shown to the customer = `max(0, client − round(B% × subtotal))`.
+  Delivery is free when the subtotal is ≥ `ceil(client / B%)` (float division).
+  `order.remit = max(0, round(A% × subtotal) (capped by max_remit) − delivery_subsidy)`
+  for delivery, else 0. Do not show it.
+- `p_A_B`: subsidy A %, no commission, billing B % (`data.billing` text, `settings.billing_percent`).
+  When delivery is free, `order.remit` = the unused subsidy, at most ฿30.
+- `f_A_B`: subsidy A %, no commission, billing B %. When delivery is free,
+  `order.remit` = all of the unused subsidy.
+- `thai…`: subsidy from a fixed list (`thai10…` 10 %, `thai15…` 15 %, …), billing from `_Y`.
+  Not used by live shops.
+- `apple`, `elderberry`, `fig`, `durian` and any other code: the web code has no rules.
+  No commission, no subsidy, the customer pays the full `client` fare.
+- Codes seen on 2026-09-27 (251 Chiang Mai shops with a Commerce workflow):
+  `r` (220), `p` (12), `f` (10), `apple` (5), `elderberry` (2), `fig` (1), `durian` (1).
+- `free_delivery_over` (with `free_delivery_distance`) and `free_delivery_polygon` also make
+  delivery free, for any package code.
 
 Other rules:
 
 - `min_order` applies to delivery only.
-- Orders of ฿1000 or more use `delivery.type = "delayed"` with `delay_duration = 26`.
+- Orders of ฿1000 or more use `delivery.type = "delayed"` with `delay_duration = 26`, but
+  only when the order is not already delayed (shop `delivery_options.type = "delayed"` or a
+  scheduled time). A delayed shop keeps its own `delay_duration`.
 - There is no service fee ("Platform Fee ฿0").
 
 ### 7.1 Values seen in the live data (2026-09-27)
@@ -400,7 +424,8 @@ Recorded by `tools/api-probe` (see `core/model/src/test/resources/fixtures/live/
 
 There is no cart API. The web app keeps the cart only in the browser, as
 `state.basket` in the saved Vuex state (`localStorage.store`):
-`{shop_id, created_at, notes, items:[{item, quantity}]}`. The server sees the
+`{shop_id, created_at, notes, items:[{item, quantity}]}`. The line rules (`id2`, merging,
+the 60-minute rule) are in [pricing.md](pricing.md) §15–§16. The server sees the
 cart only when the order is placed (§8). The web app also sends cart events
 (`add_to_basket`, `checkout_basket`, `set_order_notes`, …) to `POST logs` as
 telemetry. The admin endpoint `analytics/active_baskets_count` probably counts
@@ -441,7 +466,7 @@ component. Saved addresses come from `GET user_addresses/{userId}`.
   "type":"delivery|take-away|dine-in",
   "business":{"id","country","type","name","lat","lon","phone_number"},
   "order":{"type":"Restaurant","business_name":"…","order_value":380,"payment_method":"cash",
-    "delivery_subsidy":38,"remit":76,"fulfilment_discount":0,"special_discount":0,"vat":0,
+    "delivery_subsidy":38,"remit":38,"fulfilment_discount":0,"special_discount":0,"vat":0,
     "basket":{"items":[…],"notes":"…","languages":["en","th"]},
     "change_for":1000,"local_contact":"08…","fulfilment_time":"19:30"},
   "settings":{"vat_percent":0,"billing_percent":0,"remit_percent":0.2,
@@ -449,17 +474,23 @@ component. Saved addresses come from `GET user_addresses/{userId}`.
   "agent":false,"uuid":"<device uuid>","short_id":"<new shortid>","ref_prefix":"",
   "coords_created":{"lat":0,"lon":0},
   "delivery":{"workflow_id":"Chiang Mai Express Delivery","express_fleet":"Chiang Mai Express Delivery",
-    "is_free_delivery":false,"promo_code":"","contactless_note":"","business_note":"",
+    "is_free_delivery":false,"promo_code":null,"contactless_note":null,"business_note":"",
     "type":"delayed","delay_duration":15,"predicted_route":"<polyline>"},
   "address":{"name","address","notes","lat","lon"},
   "fare":{"version":"v1","price":40,"discount":0,"cash":40,"tukpay":0,"bonus":0,
     "distance":4423,"source":"google","remit":10,"client":50}}}
 ```
 
+- The amounts: see [pricing.md](pricing.md) §14. `order.remit` is the commission **after**
+  the delivery subsidy (in the example: round(0.2 × 380) − 38 = 38).
+- `delivery.type` and `delay_duration` are sent only for delayed orders (pricing.md §13).
+  `delivery.fallback_fleet` is sent when the shop has one. `data.billing` (text, for
+  example `"19.00"`) is sent for `p_`/`f_`/`thai…_Y` shops on delivery.
 - `delivery.workflow_id` is the fleet **name** (`workflow.data.express`), not a UUID.
-- `basket.items[]` are copies of menu items plus `quantity`, `comment`, `id2`
-  (a new id when the item has options), and
-  `options: [{menu:{id,name,en,…}, option:{id,name,price,quantity}}]`.
+- `basket.items[]` are the basket lines `{item, quantity}`. `item` is a copy of the menu
+  item plus `comment`, `id2` (a new id when the item has option groups), and
+  `options: [{menu:{id,name,en,…}, option:{id,name,price,quantity}}]` (the selected options,
+  in place of the group ids).
 - `short_id` is made by the client. We use it as an **idempotency key**: after
   a timeout, look for an ongoing order with this `short_id` before a retry.
 - The web app ignores the response. It goes to the ongoing orders list.
@@ -476,7 +507,7 @@ Checks the web app does before it sends:
   and a driver note.
 - No active block (`block_commerce_message`). If `block_multiple` is set, no
   other ongoing order.
-- Cash is not offered for delivery from 22:20 to 09:00.
+- Cash is not offered for delivery from 22:21 to 08:59 (`HHMM > 2220` or `< 900`, device time).
 
 ## 9. Orders and tracking
 
@@ -533,7 +564,7 @@ Payment methods at checkout:
 
 | Method | When offered |
 |---|---|
-| `cash` | If in `workflow.data.payment_options`. Not for delivery from 22:20 to 09:00. |
+| `cash` | If in `workflow.data.payment_options` (or no list). Not for delivery from 22:21 to 08:59. |
 | `promptpay` | Always for Thai shops. |
 | `bank-transfer` | Always for Thai shops. (The order page checks `bank_transfer` with an underscore.) |
 | `paynow` | Singapore. The QR is built from `commerce.data.paynow`. |
@@ -569,6 +600,7 @@ On the order page, the details belong to the **assigned driver**:
 | API client (all endpoints) | `app~3d685a12.*.js` module `068b` |
 | Vuex store and actions | `app~c714bc7b.*.js` |
 | Price and hours helpers | `app~50b71177.*.js` |
+| Price trace | [pricing.md](pricing.md) |
 | Home | `home~31ecd969.*.js` |
 | Eat list | `eat~31ecd969.*.js` |
 | Shop, menu, basket, fees | `shop-profile~1c39816d.*.js`, `shop-profile~21833f8f.*.js`, `shop-profile~f04d431b.*.js` |
