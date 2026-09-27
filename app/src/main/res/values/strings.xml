@@ -102,6 +102,7 @@
     <string name="item_less">One less</string>
     <string name="item_more">One more</string>
     <string name="item_add">Add to cart · %1$s</string>
+    <string name="item_limit_reached">Limit reached in your cart</string>
 
     <string name="debug_title">Debug</string>
     <string name="debug_back">Back</string>
@@ -153,7 +154,6 @@
     <string name="cart_change_option">%1$s: %2$s is not available.</string>
     <string name="cart_change_price">%1$s now costs %3$s (was %2$s).</string>
     <string name="cart_changes_ok">OK</string>
-    <string name="cart_items_total">Items</string>
     <string name="cart_subtotal">Subtotal</string>
     <string name="cart_vat">VAT</string>
     <string name="cart_discount">Discount</string>
@@ -161,6 +161,9 @@
     <string name="cart_delivery_free">Free</string>
     <string name="cart_delivery_at_checkout">At checkout</string>
     <string name="cart_total">Total</string>
+    <string name="cart_total_before_delivery">Total before delivery</string>
+    <string name="cart_free_delivery_more">Add %1$s more for free delivery.</string>
+    <string name="cart_web_only">Tuk plus cannot place this order itself. At checkout, you finish it on the Tuk website.</string>
     <string name="cart_min_order">The shop delivers orders of %1$s or more. Add %2$s more for delivery.</string>
     <string name="cart_checkout">Checkout · %1$s</string>
     <string name="cart_checkout_later">Checkout comes in a later version of Tuk plus.</string>

@@ -95,6 +95,22 @@ object OptionChoice {
         }
     }
 
+    /**
+     * Changes the quantity of a chosen option by [delta] in a group with `allow_multiple`.
+     * The total quantity of the group stays within [limit]. At 0 the option is removed.
+     */
+    fun changeQuantity(group: OptionGroup, chosen: Map<String, Int>, optionId: String, delta: Int): Map<String, Int> {
+        val current = chosen[optionId] ?: 0
+        if (delta > 0) {
+            val option = group.items.firstOrNull { it.id == optionId } ?: return chosen
+            if (option.outOfStock == true) return chosen
+            val max = limit(group)
+            if (max != null && chosen.values.sum() + delta > max) return chosen
+        }
+        val next = current + delta
+        return if (next <= 0) chosen - optionId else chosen + (optionId to next)
+    }
+
     /** True when the options of [group] can have a quantity each (a "multiple" group with `allow_multiple`). */
     fun allowsQuantity(group: OptionGroup): Boolean = !isSingle(group) && group.allowMultiple == true
 

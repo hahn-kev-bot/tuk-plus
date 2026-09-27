@@ -39,7 +39,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.hahn.tukplus.core.data.CartStore
+import app.hahn.tukplus.core.data.CartQuotes
 import app.hahn.tukplus.core.domain.TileAction
 import app.hahn.tukplus.logging.AppLogging
 import app.hahn.tukplus.logging.LogShare
@@ -72,7 +72,7 @@ private val TABS = listOf(
 class MainActivity : ComponentActivity() {
     @Inject lateinit var logging: AppLogging
     @Inject lateinit var logShare: LogShare
-    @Inject lateinit var cartStore: CartStore
+    @Inject lateinit var cartQuotes: CartQuotes
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val backStack by nav.currentBackStackEntryAsState()
                 val route = backStack?.destination?.route
-                val cart by cartStore.cart.collectAsStateWithLifecycle()
+                val cart by cartQuotes.state.collectAsStateWithLifecycle()
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.surface,
                     bottomBar = {

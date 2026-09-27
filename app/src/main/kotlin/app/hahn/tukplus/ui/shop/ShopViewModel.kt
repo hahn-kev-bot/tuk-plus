@@ -5,6 +5,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.hahn.tukplus.core.data.BrowseRepository
+import app.hahn.tukplus.core.data.CartQuote
+import app.hahn.tukplus.core.data.CartQuotes
 import app.hahn.tukplus.core.data.CartStore
 import app.hahn.tukplus.core.data.Cached
 import app.hahn.tukplus.core.domain.AddResult
@@ -70,11 +72,12 @@ class ShopViewModel @Inject constructor(
     private val recent: RecentShops,
     private val menuView: MenuViewPreference,
     private val cartStore: CartStore,
+    cartQuotes: CartQuotes,
     private val clock: Clock,
     private val log: TukLog,
 ) : ViewModel() {
     /** The cart of the device. The shop screen shows the "View cart" bar when it is for this shop. */
-    val cart: StateFlow<Cart?> = cartStore.cart
+    val cart: StateFlow<CartQuote?> = cartQuotes.state
 
     /** An item that waits for the answer to "Start a new cart?". */
     private val _pendingAdd = MutableStateFlow<PendingAdd?>(null)

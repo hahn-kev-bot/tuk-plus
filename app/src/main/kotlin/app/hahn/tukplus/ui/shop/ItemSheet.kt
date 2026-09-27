@@ -28,7 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +40,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.hahn.tukplus.R
 import app.hahn.tukplus.core.domain.CartAddition
+import app.hahn.tukplus.core.domain.CartLine
+import app.hahn.tukplus.core.domain.CartOption
 import app.hahn.tukplus.core.domain.CartRules
 import app.hahn.tukplus.core.domain.MenuRules
 import app.hahn.tukplus.core.domain.OptionChoice
@@ -49,30 +50,41 @@ import app.hahn.tukplus.core.model.Menu
 import app.hahn.tukplus.core.model.MenuEntry
 import app.hahn.tukplus.core.model.MenuOptionGroup
 import app.hahn.tukplus.core.model.parseIntLikeJavaScript
+import app.hahn.tukplus.core.pricing.CartPricing
+import app.hahn.tukplus.core.pricing.ItemPrice
+import app.hahn.tukplus.core.pricing.ShopSettings
 import app.hahn.tukplus.ui.common.Badge
 import app.hahn.tukplus.ui.common.TukImage
 import app.hahn.tukplus.ui.common.baht
 import app.hahn.tukplus.ui.theme.PictureShapes
 import app.hahn.tukplus.ui.theme.TukIcons
+import kotlin.math.floor
 
 /**
- * Item details with option groups (design: Item). "Add to cart" gives the chosen options,
- * the quantity and the note to [onAdd].
+ * Item details with option groups (design: Item). The option rules are the web app's rules
+ * (docs/pricing.md §15): groups with a `condition` show only when a chosen option matches,
+ * required groups come first, and options of hidden groups are removed. The price comes from
+ * `core:pricing`. [limit] is how many more of this item the cart can take (null: no limit).
+ * "Add to cart" gives the chosen options, the quantity and the note to [onAdd].
  */
 @Composable
-fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit, onAdd: (CartAddition) -> Unit) {
+fun ItemSheet(entry: MenuEntry, menu: Menu, shop: ShopSettings, limit: Int?, onClose: () -> Unit, onAdd: (CartAddition) -> Unit) {
     val item = entry.item
     val colors = MaterialTheme.colorScheme
-    val groups = menu.groupsFor(item)
-    // Selected option ids per option group (blob id).
-    val chosen = remember(item.id) { mutableStateMapOf<String, Set<String>>() }
+    val groupIds = item.options.orEmpty()
+    // Chosen options: group blob id to (option id to quantity).
+    var chosen by remember(item.id) { mutableStateOf<Map<String, Map<String, Int>>>(emptyMap()) }
     var quantity by remember(item.id) { mutableIntStateOf(1) }
     var note by remember(item.id) { mutableStateOf("") }
+    val maxQuantity = minOf(CartRules.MAX_QUANTITY, limit ?: CartRules.MAX_QUANTITY)
 
-    val unit = (MenuRules.discountedPrice(item) ?: 0) + groups.sumOf { group ->
-        group.group.items.filter { it.id in chosen[group.blobId].orEmpty() }.sumOf { it.price?.let(::parseIntLikeJavaScript) ?: 0 }
+    val groups = OptionChoice.visibleGroups(groupIds, menu.optionGroups, chosen)
+    val invalid = OptionChoice.invalidGroups(groupIds, menu.optionGroups, chosen)
+    val options = CartRules.optionsWithQuantity(groups, chosen)
+    val unit = remember(chosen, shop) { unitPrice(entry, menu, options, shop) }
+    val setGroup = { groupId: String, next: Map<String, Int> ->
+        chosen = OptionChoice.dropHidden(groupIds, menu.optionGroups, chosen + (groupId to next))
     }
-    val missingRequired = groups.any { OptionChoice.isMissing(it.group, chosen[it.blobId].orEmpty()) }
 
     Column(Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
@@ -92,7 +104,7 @@ fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit, onAdd: (CartAdd
                 MenuRules.discountedPrice(item)?.let { Text(baht(it), style = MaterialTheme.typography.titleLarge) }
             }
             for (group in groups) {
-                OptionGroupCard(group, chosen[group.blobId].orEmpty()) { chosen[group.blobId] = it }
+                OptionGroupCard(group, chosen[group.blobId].orEmpty()) { setGroup(group.blobId, it) }
             }
             OutlinedTextField(
                 value = note,
@@ -112,31 +124,56 @@ fun ItemSheet(entry: MenuEntry, menu: Menu, onClose: () -> Unit, onAdd: (CartAdd
                             Icon(TukIcons.Minus, contentDescription = stringResource(R.string.item_less))
                         }
                         Text(quantity.toString(), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center, modifier = Modifier.width(28.dp))
-                        IconButton(onClick = { if (quantity < CartRules.MAX_QUANTITY) quantity++ }, modifier = Modifier.size(52.dp, 56.dp)) {
+                        IconButton(onClick = { if (quantity < maxQuantity) quantity++ }, modifier = Modifier.size(52.dp, 56.dp)) {
                             Icon(TukIcons.Plus, contentDescription = stringResource(R.string.item_more))
                         }
                     }
                 }
                 Button(
-                    onClick = { onAdd(CartAddition(entry, CartRules.options(groups, chosen), quantity, note)) },
-                    enabled = !missingRequired && item.outOfStock != true,
+                    onClick = { onAdd(CartAddition(entry, options, quantity.coerceAtMost(maxQuantity), note)) },
+                    enabled = invalid.isEmpty() && item.outOfStock != true && maxQuantity > 0,
                     shape = RoundedCornerShape(28.dp),
                     modifier = Modifier.weight(1f).height(56.dp),
                 ) {
-                    Text(stringResource(R.string.item_add, baht(unit * quantity)), style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        if (maxQuantity > 0) stringResource(R.string.item_add, baht(unit * quantity)) else stringResource(R.string.item_limit_reached),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                 }
             }
         }
     }
 }
 
+/** The unit price of the item with [options], with the web price code (docs/pricing.md §2–§4). */
+private fun unitPrice(entry: MenuEntry, menu: Menu, options: List<CartOption>, shop: ShopSettings): Int {
+    val ids = options.map { it.groupId }.toSet()
+    val line = CartLine(
+        lineId = "sheet",
+        itemId = entry.item.id,
+        quantity = 1,
+        options = options,
+        item = entry.raw,
+        groups = menu.optionGroups.filterKeys { it in ids }.mapValues { it.value.raw },
+    )
+    val price = ItemPrice.lineUnit(CartPricing.webItem(line, shop))
+    return if (price.isNaN()) 0 else floor(price + 0.5).toInt()
+}
+
 @Composable
-private fun OptionGroupCard(group: MenuOptionGroup, chosen: Set<String>, onChange: (Set<String>) -> Unit) {
+private fun OptionGroupCard(group: MenuOptionGroup, chosen: Map<String, Int>, onChange: (Map<String, Int>) -> Unit) {
     val g = group.group
     val colors = MaterialTheme.colorScheme
     val single = OptionChoice.isSingle(g)
     val style = OptionChoice.style(g)
     val radio = style != OptionStyle.CHECKBOX
+    val withQuantity = OptionChoice.allowsQuantity(g)
+    val chosenIds = chosen.keys
+    // A tap chooses or removes an option; a new option starts with quantity 1.
+    val tap = { optionId: String ->
+        val ids = OptionChoice.tap(g, chosenIds, optionId)
+        onChange(ids.associateWith { chosen[it] ?: 1 })
+    }
     Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -149,8 +186,8 @@ private fun OptionGroupCard(group: MenuOptionGroup, chosen: Set<String>, onChang
             }
             Text(
                 when {
-                    g.multipleConstraint == "exactly" && g.multipleN != null -> stringResource(R.string.option_exactly, g.multipleN!!)
-                    g.multipleConstraint == "up_to" && g.multipleN != null -> stringResource(R.string.option_up_to, g.multipleN!!)
+                    g.multipleConstraint == "exactly" && g.multipleN != null && !single -> stringResource(R.string.option_exactly, g.multipleN!!)
+                    g.multipleConstraint == "up_to" && g.multipleN != null && !single -> stringResource(R.string.option_up_to, g.multipleN!!)
                     single -> stringResource(R.string.option_one)
                     else -> stringResource(R.string.option_any)
                 },
@@ -160,7 +197,7 @@ private fun OptionGroupCard(group: MenuOptionGroup, chosen: Set<String>, onChang
             if (style == OptionStyle.RADIO_WITH_NONE) {
                 // Only one option can be active, and the group is optional: "None" removes the choice.
                 Row(
-                    Modifier.selectable(selected = chosen.isEmpty(), role = Role.RadioButton) { onChange(OptionChoice.tapNone(g, chosen)) }
+                    Modifier.selectable(selected = chosen.isEmpty(), role = Role.RadioButton) { onChange(OptionChoice.tapNone(g, chosenIds).associateWith { 1 }) }
                         .fillMaxWidth().height(52.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -172,22 +209,38 @@ private fun OptionGroupCard(group: MenuOptionGroup, chosen: Set<String>, onChang
             }
             g.items.forEachIndexed { index, option ->
                 val soldOut = option.outOfStock == true
-                val selected = option.id in chosen
+                val selected = option.id in chosenIds
                 val price = option.price?.let(::parseIntLikeJavaScript) ?: 0
                 val priceText = if (price == 0) stringResource(R.string.option_free) else "+" + baht(price)
-                val enabled = !soldOut && OptionChoice.canAdd(g, chosen, option.id)
+                val enabled = !soldOut && OptionChoice.canAdd(g, chosenIds, option.id)
                 val rowModifier = if (radio) {
-                    Modifier.selectable(selected = selected, enabled = enabled, role = Role.RadioButton) { onChange(OptionChoice.tap(g, chosen, option.id)) }
+                    Modifier.selectable(selected = selected, enabled = enabled, role = Role.RadioButton) { tap(option.id) }
                 } else {
-                    Modifier.toggleable(value = selected, enabled = enabled, role = Role.Checkbox) { onChange(OptionChoice.tap(g, chosen, option.id)) }
+                    Modifier.toggleable(value = selected, enabled = enabled, role = Role.Checkbox) { tap(option.id) }
                 }
                 Row(rowModifier.fillMaxWidth().height(52.dp).alpha(if (soldOut) 0.5f else 1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(option.displayName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                     Text(if (soldOut) stringResource(R.string.sold_out) else priceText, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
-                    if (radio) RadioButton(selected = selected, onClick = null) else Checkbox(checked = selected, onCheckedChange = null)
+                    if (withQuantity && selected) {
+                        OptionQuantity(chosen[option.id] ?: 1, onMinus = { onChange(OptionChoice.changeQuantity(g, chosen, option.id, -1)) }, onPlus = { onChange(OptionChoice.changeQuantity(g, chosen, option.id, 1)) })
+                    } else if (radio) {
+                        RadioButton(selected = selected, onClick = null)
+                    } else {
+                        Checkbox(checked = selected, onCheckedChange = null)
+                    }
                 }
                 if (index < g.items.lastIndex) HorizontalDivider(color = colors.surfaceContainerHighest)
             }
         }
+    }
+}
+
+/** − quantity + for one option of a group with `allow_multiple`. At 0 the option is removed. */
+@Composable
+private fun OptionQuantity(quantity: Int, onMinus: () -> Unit, onPlus: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onMinus, modifier = Modifier.size(40.dp)) { Icon(TukIcons.Minus, contentDescription = stringResource(R.string.item_less), modifier = Modifier.size(16.dp)) }
+        Text(quantity.toString(), style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center, modifier = Modifier.width(20.dp))
+        IconButton(onClick = onPlus, modifier = Modifier.size(40.dp)) { Icon(TukIcons.Plus, contentDescription = stringResource(R.string.item_more), modifier = Modifier.size(16.dp)) }
     }
 }

@@ -3,6 +3,7 @@ package app.hahn.tukplus.ui.cart
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.hahn.tukplus.core.data.BrowseRepository
+import app.hahn.tukplus.core.data.CartQuotes
 import app.hahn.tukplus.core.data.CartStore
 import app.hahn.tukplus.core.data.ShopRepository
 import app.hahn.tukplus.core.domain.Cart
@@ -12,6 +13,7 @@ import app.hahn.tukplus.core.domain.OpenHours
 import app.hahn.tukplus.core.domain.OpenState
 import app.hahn.tukplus.core.logging.TukLog
 import app.hahn.tukplus.core.model.Business
+import app.hahn.tukplus.core.pricing.Quote
 import app.hahn.tukplus.core.model.MenuParser
 import app.hahn.tukplus.core.model.Workflow
 import app.hahn.tukplus.ui.common.chiangMaiTicker
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -31,6 +34,8 @@ import javax.inject.Inject
 
 data class CartUiState(
     val cart: Cart? = null,
+    /** The amounts from `core:pricing`. Null while the shop settings are not loaded. */
+    val quote: Quote? = null,
     val business: Business? = null,
     val openState: OpenState? = null,
     /** The order types that the shop offers, in cart screen order. */
@@ -44,6 +49,7 @@ data class CartUiState(
 @HiltViewModel
 class CartViewModel @Inject constructor(
     private val store: CartStore,
+    quotes: CartQuotes,
     browse: BrowseRepository,
     private val shops: ShopRepository,
     private val clock: Clock,
@@ -58,6 +64,24 @@ class CartViewModel @Inject constructor(
     }
 
     init {
+        // One log line when the cart screen has its amounts (to compare with tukapp.co).
+        viewModelScope.launch {
+            val priced = quotes.state.first { it?.quote != null }!!
+            val q = priced.quote!!
+            log.i(
+                "cart", "quote",
+                "business_id" to priced.cart.businessId,
+                "lines" to priced.cart.lines.size,
+                "fulfilment" to priced.fulfilment,
+                "subtotal" to q.subtotal,
+                "vat" to q.vat,
+                "discount" to q.fulfilmentDiscount,
+                "total" to q.total,
+                "free_delivery_over" to q.freeDeliveryOver,
+                "blocked" to q.blocked.joinToString(","),
+                "web_only" to q.webOnly?.name,
+            )
+        }
         // Check the cart against the newest menu (PLAN.md §5.7). The shop screen does the same.
         viewModelScope.launch {
             businessId.flatMapLatest { id ->
@@ -68,14 +92,14 @@ class CartViewModel @Inject constructor(
         }
     }
 
-    val state: StateFlow<CartUiState> = combine(store.cart, business, store.changes, chiangMaiTicker(clock)) { cart, shop, changes, now ->
-        val offered = shop?.commerceWorkflow?.data?.fulfilmentOptions
+    val state: StateFlow<CartUiState> = combine(quotes.state, business, store.changes, chiangMaiTicker(clock)) { priced, shop, changes, now ->
         CartUiState(
-            cart = cart,
+            cart = priced?.cart,
+            quote = priced?.quote,
             business = shop,
             openState = shop?.let { OpenHours.state(it, now) },
-            fulfilmentOptions = CartRules.FULFILMENT_ORDER.filter { it in offered.orEmpty() }.ifEmpty { listOf(CartRules.FULFILMENT_ORDER.first()) },
-            fulfilment = cart?.let { CartRules.fulfilment(it, offered) } ?: CartRules.FULFILMENT_ORDER.first(),
+            fulfilmentOptions = priced?.fulfilmentOptions ?: listOf(CartRules.FULFILMENT_ORDER.first()),
+            fulfilment = priced?.fulfilment ?: CartRules.FULFILMENT_ORDER.first(),
             changes = changes,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CartUiState(cart = store.cart.value))

@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -51,6 +51,8 @@ import app.hahn.tukplus.core.domain.CartLine
 import app.hahn.tukplus.core.domain.CartRules
 import app.hahn.tukplus.core.domain.LineChange
 import app.hahn.tukplus.core.domain.LinePrice
+import app.hahn.tukplus.core.pricing.BlockReason
+import app.hahn.tukplus.core.pricing.Quote
 import app.hahn.tukplus.ui.common.TukImage
 import app.hahn.tukplus.ui.common.baht
 import app.hahn.tukplus.ui.common.fulfilmentLabel
@@ -91,16 +93,20 @@ fun CartScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, viewModel: Cart
         }
 
         val blocked = cart.lines.mapNotNull { line -> CartRules.blockedReason(line)?.let { line.lineId to it } }.toMap()
-        val itemsTotal = cartItemTotal(cart)
+        val quote = state.quote
+        val previewTotal = cart.lines.sumOf { LinePrice.previewUnit(it) * it.quantity }
+        val subtotal = quote?.subtotal ?: previewTotal
+        val total = quote?.total ?: previewTotal
         val minOrder = state.business?.commerceWorkflow?.data?.minOrder ?: 0
-        val belowMin = state.fulfilment == "delivery" && minOrder > 0 && itemsTotal < minOrder
+        val belowMin = quote?.blocked?.contains(BlockReason.MIN_ORDER) ?: (state.fulfilment == "delivery" && minOrder > 0 && subtotal < minOrder)
+        val lineTotals = cart.lines.mapIndexed { index, line -> quote?.lineTotals?.getOrNull(index) ?: (LinePrice.previewUnit(line) * line.quantity) }
 
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 16.dp)) {
             if (state.changes.isNotEmpty()) {
                 item(key = "changes") { ChangesCard(state.changes, onDismiss = viewModel::dismissChanges) }
             }
-            items(cart.lines, key = { it.lineId }) { line ->
-                LineRow(line, blocked[line.lineId], onQuantity = { viewModel.setQuantity(line.lineId, it) })
+            itemsIndexed(cart.lines, key = { _, line -> line.lineId }) { index, line ->
+                LineRow(line, lineTotals[index], blocked[line.lineId], onQuantity = { viewModel.setQuantity(line.lineId, it) })
                 HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = colors.surfaceContainerHigh)
             }
             item(key = "more") {
@@ -143,21 +149,7 @@ fun CartScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, viewModel: Cart
                 )
             }
             item(key = "amounts") {
-                Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AmountRow(stringResource(R.string.cart_items_total), baht(itemsTotal))
-                        if (state.fulfilment == "delivery") AmountRow(stringResource(R.string.cart_delivery_fee), stringResource(R.string.cart_delivery_at_checkout))
-                        HorizontalDivider(color = colors.surfaceContainerHighest)
-                        AmountRow(stringResource(R.string.cart_total), baht(itemsTotal), strong = true)
-                        if (belowMin) {
-                            Text(
-                                stringResource(R.string.cart_min_order, baht(minOrder), baht(minOrder - itemsTotal)),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.error,
-                            )
-                        }
-                    }
-                }
+                Amounts(state.fulfilment, quote, subtotal, total, minOrder, belowMin)
             }
         }
 
@@ -171,10 +163,10 @@ fun CartScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, viewModel: Cart
                 }
                 Button(
                     onClick = { Toast.makeText(context, later, Toast.LENGTH_SHORT).show() },
-                    enabled = blocked.isEmpty() && !belowMin && !closed,
+                    enabled = blocked.isEmpty() && !belowMin && !closed && quote?.subtotal != null,
                     shape = RoundedCornerShape(28.dp),
                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                ) { Text(stringResource(R.string.cart_checkout, baht(itemsTotal)), style = MaterialTheme.typography.labelLarge) }
+                ) { Text(stringResource(R.string.cart_checkout, baht(total)), style = MaterialTheme.typography.labelLarge) }
             }
         }
     }
@@ -196,7 +188,7 @@ fun CartScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, viewModel: Cart
 }
 
 @Composable
-private fun LineRow(line: CartLine, blocked: Blocked?, onQuantity: (Int) -> Unit) {
+private fun LineRow(line: CartLine, lineTotal: Int, blocked: Blocked?, onQuantity: (Int) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val item = LinePrice.menuItem(line)
     Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -212,7 +204,7 @@ private fun LineRow(line: CartLine, blocked: Blocked?, onQuantity: (Int) -> Unit
                 null -> Unit
             }
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(baht(LinePrice.previewUnit(line) * line.quantity), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(baht(lineTotal), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 Stepper(line.quantity, onQuantity)
             }
         }
@@ -261,6 +253,48 @@ private fun ChangesCard(changes: List<LineChange>, onDismiss: () -> Unit) {
             }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.cart_changes_ok)) }
+            }
+        }
+    }
+}
+
+/**
+ * The amounts before checkout (docs/pricing.md): items, take-away or dine-in discount, VAT,
+ * delivery, total. There is no address yet, so the delivery fee is "At checkout", unless
+ * the order already has free delivery.
+ */
+@Composable
+private fun Amounts(fulfilment: String, quote: Quote?, subtotal: Int, total: Int, minOrder: Int, belowMin: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    val delivery = fulfilment == "delivery"
+    Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainerLow, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AmountRow(stringResource(R.string.cart_subtotal), baht(subtotal))
+            quote?.fulfilmentDiscount?.takeIf { it > 0 }?.let { AmountRow(stringResource(R.string.cart_discount), "−" + baht(it)) }
+            quote?.vat?.takeIf { it > 0 }?.let { AmountRow(stringResource(R.string.cart_vat), baht(it)) }
+            if (delivery) {
+                val fee = when {
+                    quote?.isFreeDelivery == true -> stringResource(R.string.cart_delivery_free)
+                    quote?.deliveryFee != null -> baht(quote.deliveryFee!!)
+                    else -> stringResource(R.string.cart_delivery_at_checkout)
+                }
+                AmountRow(stringResource(R.string.cart_delivery_fee), fee)
+            }
+            HorizontalDivider(color = colors.surfaceContainerHighest)
+            AmountRow(stringResource(if (delivery && quote?.fare == null && quote?.isFreeDelivery != true) R.string.cart_total_before_delivery else R.string.cart_total), baht(total), strong = true)
+            val remainder = quote?.freeDeliveryRemainder
+            if (delivery && quote?.isFreeDelivery != true && remainder != null && remainder > 0) {
+                Text(stringResource(R.string.cart_free_delivery_more, baht(remainder)), style = MaterialTheme.typography.bodySmall, color = colors.primary)
+            }
+            if (belowMin) {
+                Text(
+                    stringResource(R.string.cart_min_order, baht(minOrder), baht(minOrder - subtotal)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.error,
+                )
+            }
+            if (quote?.webOnly != null) {
+                Text(stringResource(R.string.cart_web_only), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
         }
     }

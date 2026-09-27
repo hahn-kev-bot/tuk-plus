@@ -53,12 +53,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.hahn.tukplus.R
 import app.hahn.tukplus.core.data.Cached
+import app.hahn.tukplus.core.domain.CartRules
 import app.hahn.tukplus.core.domain.Categories
 import app.hahn.tukplus.core.domain.MenuRules
 import app.hahn.tukplus.core.domain.MenuSection
 import app.hahn.tukplus.core.domain.OpenState
 import app.hahn.tukplus.core.model.Menu
 import app.hahn.tukplus.core.model.MenuEntry
+import app.hahn.tukplus.core.pricing.ShopSettings
 import app.hahn.tukplus.platform.MenuView
 import app.hahn.tukplus.ui.cart.CartBar
 import app.hahn.tukplus.ui.common.Badge
@@ -89,7 +91,7 @@ fun ShopScreen(onBack: () -> Unit, onOpenCart: () -> Unit, viewModel: ShopViewMo
     val state by viewModel.state.collectAsStateWithLifecycle()
     val cart by viewModel.cart.collectAsStateWithLifecycle()
     val pendingAdd by viewModel.pendingAdd.collectAsStateWithLifecycle()
-    val cartHere = cart?.takeIf { it.businessId == state.business?.id }
+    val cartHere = cart?.takeIf { it.cart.businessId == state.business?.id }
     var selected by remember { mutableStateOf<MenuEntry?>(null) }
     var searchOpen by remember { mutableStateOf(state.menuSearch.isNotBlank()) }
     val listState = rememberLazyListState()
@@ -181,7 +183,8 @@ fun ShopScreen(onBack: () -> Unit, onOpenCart: () -> Unit, viewModel: ShopViewMo
             onDismissRequest = { selected = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
-            ItemSheet(entry, menu, onClose = { selected = null }, onAdd = { addition ->
+            val shop = remember(state.business) { ShopSettings.from(state.business?.commerceWorkflow?.data) }
+            ItemSheet(entry, menu, shop, limit = CartRules.addLimit(cartHere?.cart, entry.item), onClose = { selected = null }, onAdd = { addition ->
                 selected = null
                 viewModel.addToCart(addition)
             })

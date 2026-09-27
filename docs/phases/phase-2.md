@@ -1,6 +1,6 @@
 # Phase 2 – Cart and pricing
 
-Status: **in progress** (pricing done, cart UI and Room not done).
+Status: **built, waiting for the owner's device test**.
 
 ## Progress
 
@@ -10,9 +10,32 @@ Status: **in progress** (pricing done, cart UI and Room not done).
   (1098 cases).
 - Done: `core:pricing` port (`Pricing.quote`, `CartPricing`). All parity cases pass.
 - Done: web option rules in `core:domain` (`exactly` on optional groups, `condition`,
-  `max_count`, free gift). Owner decisions: docs/pricing.md §21.
-- To do: item sheet with quantities per option and the new rules; cart screen with
-  `Pricing.quote`; Room; menu-change check on refresh.
+  `max_count`, free gift, a quantity per option). Owner decisions: docs/pricing.md §21.
+- Done: cart (`core:domain` `CartRules`, `core:data` `CartStore`), menu-change check
+  on each menu load, `CartQuotes` (the cart priced with `core:pricing` each minute).
+- Done: screens: item sheet (conditional groups, option quantities, item limits,
+  exact price), "View cart" bar (shop menu and main tabs), cart screen (lines,
+  quantities, order type, order note, subtotal, discount, VAT, delivery, total,
+  free-delivery hint, minimum order, shop closed, web-only note).
+
+## Decisions made
+
+| Decision | Choice | Why |
+|---|---|---|
+| Cart storage | One JSON file (`files/cart/cart.json`), atomic write. **Not Room.** | One small cart. A file needs no schema migrations. |
+| Cart screen design | Built directly in the Lorikeet design, no mockup first. | The owner reviews on the device; changes are cheap. |
+| Lines with options | A quantity > 1 is allowed (the web app always uses 1). | The amounts are linear (docs/pricing.md §21). |
+| Lines with a note | Do not merge with other lines (the web app merges, last note wins). | The note belongs to its line. |
+| Delivery fee in the cart | "At checkout", because there is no address before checkout (phase 4). | The fare depends on the distance. |
+| Clock for peak and cash hours | Asia/Bangkok, not the device time zone. | The shops are in Chiang Mai. |
+
+## Known gaps
+
+- The menu list shows item prices without the shop's `visual_discount` (the web app shows a
+  higher price with a larger discount; the net price is the same, rounding can differ by ฿1).
+  The item sheet and the cart use `core:pricing`, so their amounts are exact.
+- `UserDeliveryOptions` (the user's own remit and extra distance) are not read yet.
+  They need the login (phase 3).
 
 ## Goal
 
@@ -39,7 +62,7 @@ own price code for every recorded menu and basket.
 - Cart (PLAN.md §5.7):
   - one cart for one shop; the 60-minute rule when the user adds from another shop;
   - a line per item with options (`id2`), lines without options merge;
-  - saved in Room (first use of Room in the app);
+  - saved in one JSON file (see "Decisions made");
   - each line keeps a copy of the item and option data and the menu version;
     after a menu refresh, the app checks each line (removed, sold out, price
     changed) and shows the changes.
@@ -49,8 +72,7 @@ own price code for every recorded menu and basket.
   - cart screen with the order type choice (delivery / take-away / dine-in) and
     the price breakdown.
 - Trace the other package codes in the web code (`p_`, `f_`, `thai`, and the new
-  `apple`, `elderberry`, `fig`, `durian`). Until then, those shops offer only
-  the web checkout fallback (phase 4).
+  `apple`, `elderberry`, `fig`, `durian`). Done: all are supported.
 
 ## Parity tests
 
@@ -60,11 +82,6 @@ recorded menus and on generated baskets. It saves the results as fixtures. The
 Kotlin tests must give the same numbers. The tool is run by hand, like the API
 probe; the tests only read the fixtures.
 
-## Decisions to make at the start
-
-- Cart screen design (mockup for the owner, like phase 1).
-- Room schema for the cart.
-
 ## Draft owner test list
 
 1. Add items with and without options from one shop. The cart shows each line
@@ -73,3 +90,6 @@ probe; the tests only read the fixtures.
 3. Change quantities and remove lines.
 4. Close and open the app. The cart is still there.
 5. Compare the cart total with tukapp.co for the same items (without ordering).
+   Try a take-away order at a shop with a take-away discount, and a shop with VAT.
+6. An item with a "choose up to N" group with quantities: the quantities stop at N.
+7. Share the logs. Look for `cart add`, `cart quote` and `cart line_changed`.

@@ -283,6 +283,13 @@ object CartRules {
         return Reconciled(cart.copy(lines = lines), changes)
     }
 
+    /** The chosen options with quantities (group id to option id to quantity) as cart options, in menu order. */
+    fun optionsWithQuantity(groups: List<MenuOptionGroup>, chosen: Map<String, Map<String, Int>>): List<CartOption> =
+        groups.flatMap { group ->
+            val quantities = chosen[group.blobId].orEmpty()
+            group.group.items.mapNotNull { option -> quantities[option.id]?.takeIf { it > 0 }?.let { CartOption(group.blobId, option.id, it) } }
+        }
+
     /** The chosen options of the item sheet as cart options, in menu order. */
     fun options(groups: List<MenuOptionGroup>, chosen: Map<String, Set<String>>): List<CartOption> =
         groups.flatMap { group ->

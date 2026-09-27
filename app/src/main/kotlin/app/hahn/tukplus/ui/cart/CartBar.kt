@@ -22,21 +22,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.hahn.tukplus.R
-import app.hahn.tukplus.core.domain.Cart
+import app.hahn.tukplus.core.data.CartQuote
 import app.hahn.tukplus.core.domain.LinePrice
 import app.hahn.tukplus.ui.common.baht
 import app.hahn.tukplus.ui.theme.TukIcons
 
-/** The item total of the cart, for the bar. The cart screen shows the exact amounts. */
-fun cartItemTotal(cart: Cart): Int = cart.lines.sumOf { LinePrice.previewUnit(it) * it.quantity }
+/**
+ * The amount for the bar: the total before the delivery fee, from `core:pricing`. Until the
+ * shop settings are loaded, a preview from the saved lines.
+ */
+fun barTotal(cart: CartQuote): Int =
+    cart.quote?.total ?: cart.cart.lines.sumOf { LinePrice.previewUnit(it) * it.quantity }
 
 /**
  * The "View cart" bar: item count, shop name (when [showShop]) and item total.
  * The shop menu shows it at the bottom; the main tabs show it above the navigation bar.
  */
 @Composable
-fun CartBar(cart: Cart, showShop: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun CartBar(quote: CartQuote, showShop: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
+    val cart = quote.cart
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(28.dp),
@@ -60,7 +65,7 @@ fun CartBar(cart: Cart, showShop: Boolean, onClick: () -> Unit, modifier: Modifi
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Text(baht(cartItemTotal(cart)), style = MaterialTheme.typography.titleMedium)
+            Text(baht(barTotal(quote)), style = MaterialTheme.typography.titleMedium)
             Icon(TukIcons.Cart, contentDescription = null, modifier = Modifier.size(22.dp))
         }
     }

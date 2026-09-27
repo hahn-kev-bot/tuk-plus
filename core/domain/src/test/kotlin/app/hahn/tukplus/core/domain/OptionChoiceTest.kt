@@ -119,4 +119,16 @@ class OptionChoiceTest {
         assertEquals(listOf("soup"), OptionChoice.invalidGroups(ids, groups, chosen))
         assertEquals(mapOf("base" to mapOf("r" to 1)), OptionChoice.dropHidden(ids, groups, mapOf("base" to mapOf("r" to 1), "soup" to mapOf("c" to 1))))
     }
+
+    @Test
+    fun `option quantities stay within the group limit`() {
+        val g = group("multiple", required = false, constraint = "up_to", n = 3).copy(allowMultiple = true)
+        var chosen = OptionChoice.changeQuantity(g, emptyMap(), "a", 1)
+        chosen = OptionChoice.changeQuantity(g, chosen, "a", 1)
+        chosen = OptionChoice.changeQuantity(g, chosen, "b", 1)
+        assertEquals(mapOf("a" to 2, "b" to 1), chosen)
+        assertEquals(chosen, OptionChoice.changeQuantity(g, chosen, "c", 1)) // limit 3
+        assertEquals(chosen, OptionChoice.changeQuantity(g, chosen, "x", 1)) // sold out
+        assertEquals(mapOf("a" to 2), OptionChoice.changeQuantity(g, chosen, "b", -1))
+    }
 }

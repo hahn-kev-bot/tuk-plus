@@ -50,7 +50,7 @@ card payment (Stripe), shop and driver screens, LINE/Facebook/Apple login.
 | Architecture | MVVM + unidirectional data flow; repositories expose `Flow<Cached<T>>` |
 | DI | Hilt |
 | Network | OkHttp + kotlinx.serialization, with a small own client (`TukApi`). No Retrofit: the API mixes JSON, plain text, `null` bodies and HTTP 500 answers that are not errors, and a thin client handles this more simply. |
-| Local cache | API responses: raw JSON files (`FileResponseCache`, see docs/phases/phase-1.md). Cart and orders: Room (phase 2+) |
+| Local cache | API responses: raw JSON files (`FileResponseCache`, see docs/phases/phase-1.md). Cart: one JSON file (`CartStore`, phase 2). Orders: to decide in phase 5 |
 | Settings / session | DataStore; user id in EncryptedSharedPreferences or Tink |
 | Images | Coil 3 with a large disk cache |
 | Background work | WorkManager |
@@ -65,7 +65,7 @@ card payment (Stripe), shop and driver screens, LINE/Facebook/Apple login.
 app/                      Application, navigation, DI setup
 core/model/               Plain data classes (Shop, MenuItem, OptionGroup, Order, …)
 core/network/             TukApi client, auth, retries (GET only), HTTP logging, error mapping
-core/database/            Room entities, DAOs
+core/database/            (not used yet; the cart is a JSON file in core/data)
 core/data/                Repositories, cache policy, sync workers
 core/pricing/             Pure Kotlin: price, options, VAT, delivery fare, open hours
 core/ui/                  Theme, common components (CacheAgeChip, skeletons, errors)
@@ -190,7 +190,7 @@ Web app rules that we copy:
 
 Our additions:
 
-- Store the cart in Room, so it survives app restarts.
+- Store the cart in one JSON file on the device (`CartStore`), so it survives app restarts.
 - Store a copy of the item and option data (name, price) in the cart line, with
   the menu version. When the menu refreshes, check each line again: removed item,
   out of stock, price changed, option group changed. Show the changes to the user
@@ -251,7 +251,7 @@ Each phase ends with a build that works. Each phase has its own file in
 |---|---|---|
 | 0. Foundations ✅ [spec](phases/phase-0.md) | Gradle project, modules, CI (build, lint, unit tests). Session logger (§9). `tools/api-probe` that calls the live read-only endpoints and checks our models. Record JSON fixtures. | The probe parses all Chiang Mai eateries and 25+ menus without errors. Logs export works. |
 | 1. Browse (no login) ✅ built, [spec](phases/phase-1.md) | Home, Eat list, Search, Shop menu. Response cache, `Cached<T>`, age chip, prefetch. | Cold start shows Home in < 1 s from cache. Shop opens at once from cache. |
-| 2. Cart and pricing [spec](phases/phase-2.md) | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in Room. | Unit tests match the web app results for every recorded menu (see §10). |
+| 2. Cart and pricing [spec](phases/phase-2.md) | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in a JSON file on the device. | Unit tests match the web app results for every recorded menu (see §10). |
 | 3. Account [spec](phases/phase-3.md) | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
 | 4. Checkout [spec](phases/phase-4.md) | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. Web checkout fallback (§8a) with the background order check. | The owner places a real order in Tuk plus, and one with the fallback. The shop sees correct items and totals. The check logs its result. |
 | 5. Orders and payment [spec](phases/phase-5.md) | Order list, detail, polling, foreground tracking notification, driver map, payment details panel, payment slip upload, cancel, "Open on Tuk website". | The owner follows a real order from placed to delivered and pays with the details shown. |
