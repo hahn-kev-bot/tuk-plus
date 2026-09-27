@@ -16,7 +16,7 @@ notifications. The project owner tests orders manually with real orders.
 
 Release 1 decisions:
 
-- App name: **Tuk plus**.
+- App name: **Tuk plus**. Application id: **`app.hahn.tukplus`**.
 - Language: **English only**. All UI text goes in string resources, so we can
   add Thai later. Menu and shop text uses the `en` field if present, else the
   default field.
@@ -222,7 +222,13 @@ Payment happens outside the app. The app shows:
   order after the shop has confirmed…".
 - For cash: the amount and the "change for" value.
 - For take-away / dine-in: "Pay at the shop".
-- Optional (phase 5+): upload a payment slip photo, the same as the web app.
+- Payment slip upload (in scope). The user takes a photo or picks an image of
+  the transfer slip. The app uploads it (the web app uses
+  `POST …execute-api…/dev/uploadimage`; we must trace the request body before
+  phase 5) and then sends
+  `PATCH transactions/{id} {"data":{"payment_receipt_pic":"<url>"}}`.
+  The order then shows "Paid – slip sent". The upload runs in WorkManager, so it
+  continues on a slow network and after the app closes. The app logs each step.
 
 ## 8. Phases
 
@@ -234,9 +240,92 @@ Each phase ends with a build that works.
 | 1. Browse (no login) | Home, Eat list, Search, Shop menu. Room cache, `Cached<T>`, age chip, prefetch. | Cold start shows Home in < 1 s from cache. Shop opens at once from cache. |
 | 2. Cart and pricing | `core/pricing` with option rules, discounts, VAT, delivery fare, open hours. Cart saved in Room. | Unit tests match the web app results for every recorded menu (see §9). |
 | 3. Account | SMS login, device uuid, session, profile, saved addresses, language. | Login works with a real phone. |
-| 4. Checkout | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. | The owner places a real order. The shop sees correct items and totals. |
-| 5. Orders and payment | Order list, detail, polling, foreground tracking notification, driver map, payment details panel, cancel. | The owner follows a real order from placed to delivered and pays with the details shown. |
+| 4. Checkout | Address picker with map, route distance, fees, payment method, validation, place order with idempotency check. Order preview screen in debug builds shows the exact JSON before it is sent. **Web app fallback** (§8a) and the dry-run order comparison. | The owner places a real order. The shop sees correct items and totals. |
+| 5. Orders and payment | Order list, detail, polling, foreground tracking notification, driver map, payment details panel, payment slip upload, cancel, "Open on Tuk website". | The owner follows a real order from placed to delivered and pays with the details shown. |
 | 6. Polish | Accessibility, dark theme, offline mode, error reporting, release build, Play Store listing. | Beta testers use it for a week. |
+
+## 8a. Web app fallback
+
+We keep the real Tuk web app as a fallback inside Tuk plus. It runs in an
+in-app **WebView** (not in Chrome or a Custom Tab), because the app must write
+into the web app's local storage.
+
+### How it works (tested)
+
+The web app saves its whole state in `localStorage["store"]` (JSON). At start it
+reads the value back with `Object.assign(defaultState, stored)` and does no other
+checks. We tested this on 2026-09-27 in a headless browser: we wrote a cart into
+`store.basket` before the page loaded and opened `/shop/<id>`. The web app
+showed "Checkout 2 Items ฿500" and its checkout started with our cart. No order
+was sent.
+
+In Android:
+
+1. Before the page loads, a document-start script
+   (`WebViewCompat.addDocumentStartJavaScript`, only for `https://tukapp.co`)
+   reads `localStorage.store`, **merges** our values into it, and writes it back.
+   It does this only once for each hand-off (a one-time token), so a page reload
+   does not reset the cart.
+2. Values that we write:
+   - `basket`: `{shop_id, created_at, notes, items:[{item, quantity}]}`. Each
+     `item` is a copy of the menu item in the web app format, with `id2`,
+     `comment` and `options:[{menu, option}]` (api-reference §8).
+   - `user`, `userSource`, `roles`: the login bundle from our login. The web
+     app then counts as logged in.
+   - `uuid`: `{uuid, createdAt}`, the same device uuid as the app. The web app
+     checks the pair with `users/{id}?uuid=&check=true`, so it must match.
+   - `language: "en"`, `region: "Chiang Mai"`.
+3. The WebView opens `https://tukapp.co/shop/<businessId>`.
+
+### Option A – finish the order on the web app
+
+- Checkout has a button "Finish on Tuk website". It is also offered when our
+  checkout fails before the order is sent (validation problem, unknown shop
+  package, pricing error).
+- The web app then calculates the fees, asks for the address and payment method,
+  and sends the order itself. It is the reference implementation, so the order
+  is correct even if our pricing code has a bug.
+- The address cannot be pre-filled. It is a local value in the web checkout
+  screen. But addresses that we save with `POST user_addresses` show in the web
+  app's saved-address list.
+- When the web app goes to `/orders?tab=ongoing` (after it places the order),
+  Tuk plus closes the WebView, clears its own cart and refreshes the ongoing
+  orders. The order shows in our app because it has the same user id.
+
+### Option B – open our order on the web app
+
+- The order detail screen has "Open on Tuk website". It opens
+  `https://tukapp.co/commerce_order/<orderId>` in the WebView with the same
+  login injection.
+- The login is needed: the web order page shows the customer actions (for example
+  cancel and slip upload) only when `order.created_by == user.id`.
+- Use this when our order screen shows something wrong, or for a feature that we
+  do not have yet.
+
+### Dry-run order comparison (debug builds)
+
+The document-start script can also wrap `XMLHttpRequest`. In dry-run mode it
+catches the web app's `POST transactions` body, sends it to Tuk plus through a
+JavaScript interface, and **stops the request**. So:
+
+1. We build our order JSON for a cart.
+2. We hand the same cart to the web app in dry-run mode and complete its
+   checkout with the same address and payment method.
+3. The app compares the two JSON bodies field by field and logs the result.
+
+With this, the owner can check our fees and totals against the web app for any
+shop, **without placing an order**. This is the most important test before
+a real order with a new kind of shop.
+
+### Risks
+
+- The web app can change its state format. After each hand-off, the script reads
+  the state back and checks the cart item count. If it does not match, the app
+  logs it and shows a message.
+- The web app in the WebView sends its own telemetry to Tuk. That is normal
+  for the web app.
+- The web app uses the device time zone for open hours. Phones in Thailand are
+  correct. For tests elsewhere, the WebView cannot change the time zone.
 
 ## 9. Logging
 
@@ -331,8 +420,4 @@ All automatic tests are **logic only**. They do not use the network.
 | Packages other than `r_x_y` (`p_`, `f_`, `thai`) are not fully traced. | Read that code before phase 2 ends. Until then, show a "order on the website" link for those shops. |
 | Route distance: the web app uses GraphHopper with its own key. | Use Tuk's `GET directions` first (same result source), then straight line × 1.25. |
 
-Questions for the project owner:
-
-1. Is the payment-slip upload in scope?
-2. Package id (application id)? Proposal: `app.tukplus`. It cannot change after
-   the first Play Store release.
+There are no open questions for the project owner now.

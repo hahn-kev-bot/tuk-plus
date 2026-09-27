@@ -377,6 +377,30 @@ cart only when the order is placed (§8). The web app also sends cart events
 telemetry. The admin endpoint `analytics/active_baskets_count` probably counts
 these events.
 
+## 7b. Web app state (`localStorage.store`)
+
+The web app keeps its whole Vuex state as JSON in `localStorage["store"]`. It
+writes the value after each change. At start, `initialiseStore` does
+`replaceState(Object.assign(defaultState, JSON.parse(localStorage.store)))`
+(`app~c714bc7b`, about line 3928). There is no version or check.
+
+Keys that matter for a hand-off from a native app:
+
+| Key | Shape |
+|---|---|
+| `basket` | `{shop_id, created_at (ISO), notes, items:[{item, quantity}]}` |
+| `user`, `userSource`, `roles` | The login bundle from `GET magic_login/{id}?code=` |
+| `uuid` | `{uuid, createdAt}` – must be the uuid bound to the user |
+| `language` | `"en"` |
+| `region` | `"Chiang Mai"` |
+
+The shop page uses `state.basket` if it is for this shop, or if it is less than
+60 minutes old (`initBasket`, `shop-profile~1c39816d`). Tested: an injected
+basket shows in the checkout bar and in the web checkout.
+
+The delivery address is not in the store. It is a local value of the checkout
+component. Saved addresses come from `GET user_addresses/{userId}`.
+
 ## 8. Placing an order
 
 `POST transactions` (Vuex `createTransaction`, 5 s debounce).
