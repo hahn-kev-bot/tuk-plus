@@ -26,7 +26,22 @@ android {
         buildConfigField("String", "GIT_COMMIT", "\"${gitCommit.get()}\"")
     }
 
+    signingConfigs {
+        // One shared debug key in the repository, so that every build (local and CI)
+        // has the same signature and a new APK installs over the old one.
+        // This key is public. Do not use it for a Play Store release.
+        getByName("debug") {
+            storeFile = file("signing/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
         }

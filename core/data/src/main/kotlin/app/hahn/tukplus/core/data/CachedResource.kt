@@ -81,17 +81,30 @@ class CachedResource<T>(
     private suspend fun ensureLoaded() = loadMutex.withLock {
         if (loadedFromDisk) return@withLock
         loadedFromDisk = true
+        val readStart = System.nanoTime()
         val body = cache.read(endpoint.cacheKey)
+        val readMs = (System.nanoTime() - readStart) / 1_000_000
         if (body == null) {
             log.d("cache", "miss", "key" to endpoint.cacheKey)
             return@withLock
         }
-        when (val decoded = endpoint.decode(body.text)) {
+        val parseStart = System.nanoTime()
+        val decoded = endpoint.decode(body.text)
+        val parseMs = (System.nanoTime() - parseStart) / 1_000_000
+        when (decoded) {
             is ApiResult.Success -> {
                 val age = Duration.between(body.fetchedAt, clock.instant())
                 _state.value = Cached(decoded.value, body.fetchedAt, Cached.Status.Fresh)
                 _state.value = _state.value.copy(status = if (needsRefresh()) Cached.Status.Stale else Cached.Status.Fresh)
-                log.d("cache", "hit", "key" to endpoint.cacheKey, "age_s" to age.seconds, "stale" to (_state.value.status == Cached.Status.Stale))
+                log.d(
+                    "cache", "hit",
+                    "key" to endpoint.cacheKey,
+                    "age_s" to age.seconds,
+                    "stale" to (_state.value.status == Cached.Status.Stale),
+                    "bytes" to body.text.length,
+                    "read_ms" to readMs,
+                    "parse_ms" to parseMs,
+                )
             }
             is ApiResult.Failure -> log.w("cache", "unreadable", "key" to endpoint.cacheKey, "error" to decoded.message)
         }
@@ -108,13 +121,26 @@ class CachedResource<T>(
         log.d("cache", "refresh_start", "key" to endpoint.cacheKey, "age_s" to before.age(clock.instant())?.seconds)
         val next: Cached<T> = when (val text = fetch(endpoint)) {
             is ApiResult.Failure -> failed(before, text)
-            is ApiResult.Success -> when (val decoded = endpoint.decode(text.value, text.durationMs)) {
-                is ApiResult.Failure -> failed(before, decoded)
-                is ApiResult.Success -> {
-                    val now = clock.instant()
-                    cache.write(endpoint.cacheKey, CachedBody(text.value, now))
-                    log.d("cache", "refresh_done", "key" to endpoint.cacheKey, "ms" to text.durationMs)
-                    Cached(decoded.value, now, Cached.Status.Fresh)
+            is ApiResult.Success -> {
+                val parseStart = System.nanoTime()
+                val decoded = endpoint.decode(text.value, text.durationMs)
+                val parseMs = (System.nanoTime() - parseStart) / 1_000_000
+                when (decoded) {
+                    is ApiResult.Failure -> failed(before, decoded)
+                    is ApiResult.Success -> {
+                        val now = clock.instant()
+                        val writeStart = System.nanoTime()
+                        cache.write(endpoint.cacheKey, CachedBody(text.value, now))
+                        val writeMs = (System.nanoTime() - writeStart) / 1_000_000
+                        log.d(
+                            "cache", "refresh_done",
+                            "key" to endpoint.cacheKey,
+                            "net_ms" to text.durationMs,
+                            "parse_ms" to parseMs,
+                            "write_ms" to writeMs,
+                        )
+                        Cached(decoded.value, now, Cached.Status.Fresh)
+                    }
                 }
             }
         }

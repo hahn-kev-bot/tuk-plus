@@ -13,6 +13,9 @@ Put the SDK path in `local.properties` (`sdk.dir=/path/to/android-sdk`), or set 
 The debug APK is `app/build/outputs/apk/debug/app-debug.apk`. CI also uploads it
 as the `tukplus-debug-apk` artifact.
 
+All debug builds are signed with the shared key in `app/signing/debug.keystore`
+(see `app/signing/README.md`), so a new APK installs over the old one.
+
 ## Modules
 
 | Module | Kind | Content |
