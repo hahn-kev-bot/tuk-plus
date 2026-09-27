@@ -19,13 +19,22 @@ class LogShare(private val context: Context, private val logging: AppLogging) {
     private val exporter = LogExporter(logging.store)
 
     sealed interface What {
-        data class Days(val days: List<LocalDate>) : What
-        data object ThisSession : What
+        /** Text for the README and the log. */
+        val description: String
+
+        data class Days(val days: List<LocalDate>, val reason: String? = null) : What {
+            override val description: String
+                get() = days.sortedDescending().joinToString(", ") + (reason?.let { " ($it)" } ?: "")
+        }
+
+        data object ThisSession : What {
+            override val description: String get() = "this session"
+        }
     }
 
     /** Makes the zip on a background thread. Gives the share intent. */
     suspend fun prepare(what: What): Intent = withContext(Dispatchers.IO) {
-        logging.log.i("debug", "logs_export", "what" to what.toString())
+        logging.log.i("debug", "logs_export", "what" to what.description)
         logging.flushBlocking()
         val dir = File(context.cacheDir, "log-exports").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() } // Keep only the newest export.
@@ -33,7 +42,7 @@ class LogShare(private val context: Context, private val logging: AppLogging) {
         val file = File(dir, "tukplus-logs-$stamp.zip")
         val today = LocalDate.now(logging.clock)
         when (what) {
-            is What.Days -> exporter.exportDays(what.days, file, readme(what.toString()))
+            is What.Days -> exporter.exportDays(what.days, file, readme(what.description))
             What.ThisSession -> exporter.exportSession(
                 logging.log.sessionId, listOf(today.minusDays(1), today), file, readme("session ${logging.log.sessionId}"),
             )

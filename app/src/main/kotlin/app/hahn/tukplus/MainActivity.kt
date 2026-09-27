@@ -10,6 +10,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -42,12 +44,17 @@ class MainActivity : ComponentActivity() {
             TukPlusTheme {
                 Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
                     val nav = rememberNavController()
+                    // Log each screen change in one place (PLAN.md §9.2).
+                    DisposableEffect(nav) {
+                        val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
+                            logging.log.i("ui", "screen", "name" to destination.route)
+                        }
+                        nav.addOnDestinationChangedListener(listener)
+                        onDispose { nav.removeOnDestinationChangedListener(listener) }
+                    }
                     NavHost(navController = nav, startDestination = "home") {
                         composable("home") {
-                            HomeScreen(onOpenDebug = {
-                                logging.log.i("ui", "screen", "name" to "debug")
-                                nav.navigate("debug")
-                            })
+                            HomeScreen(onOpenDebug = { nav.navigate("debug") })
                         }
                         composable("debug") { DebugScreen(onBack = { nav.popBackStack() }) }
                     }
@@ -76,7 +83,7 @@ class MainActivity : ComponentActivity() {
                     close()
                     scope.launch {
                         val today = LocalDate.now(logging.clock)
-                        startActivity(logShare.prepare(LogShare.What.Days(listOf(today, today.minusDays(1)))))
+                        startActivity(logShare.prepare(LogShare.What.Days(listOf(today, today.minusDays(1)), reason = "after a crash")))
                     }
                 }) { Text(stringResource(R.string.crash_share)) }
             },
