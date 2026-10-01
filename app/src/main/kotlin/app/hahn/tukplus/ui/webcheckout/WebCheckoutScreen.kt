@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -69,7 +70,8 @@ fun WebCheckoutScreen(onClose: () -> Unit, onPlaced: () -> Unit, viewModel: WebC
         if (view != null && view.canGoBack()) view.goBack() else askLeave = true
     }
 
-    Column(Modifier.fillMaxSize()) {
+    // imePadding: the web form fields stay above the keyboard.
+    Column(Modifier.fillMaxSize().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { askLeave = true }) { Icon(TukIcons.Close, contentDescription = stringResource(R.string.close)) }
             Column(Modifier.weight(1f)) {
@@ -86,7 +88,9 @@ fun WebCheckoutScreen(onClose: () -> Unit, onPlaced: () -> Unit, viewModel: WebC
             !supported -> Message(stringResource(R.string.web_checkout_unsupported))
             gone -> Message(stringResource(R.string.web_checkout_gone))
             else -> AndroidView(
-                modifier = Modifier.fillMaxSize(),
+                // Only the space below the title row. With fillMaxSize the page was taller than the
+                // screen, and the web app's fixed "Checkout" bar at the bottom was off screen.
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 factory = { context ->
                     WebView(context).apply {
                         settings.javaScriptEnabled = true
