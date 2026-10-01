@@ -78,6 +78,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.webkit)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 

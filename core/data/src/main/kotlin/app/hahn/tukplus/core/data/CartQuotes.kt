@@ -32,6 +32,14 @@ data class CartQuote(
     /** The order types that the shop offers, in cart screen order. */
     val fulfilmentOptions: List<String>,
     val quote: Quote?,
+    /** The Commerce workflow that the quote used (from the menu), or null. */
+    val workflow: Workflow? = null,
+    /** The delivery fleets that the quote used, or null. */
+    val fleet: CommerceDelivery? = null,
+    /** The shop location. */
+    val pickup: LatLon? = null,
+    /** The settings that the quote used. */
+    val shop: ShopSettings? = null,
 )
 
 /**
@@ -77,18 +85,19 @@ class CartQuotes(
         val offered = data?.fulfilmentOptions
         val fulfilment = CartRules.fulfilment(cart, offered)
         val options = CartRules.FULFILMENT_ORDER.filter { it in offered.orEmpty() }.ifEmpty { listOf(CartRules.FULFILMENT_ORDER.first()) }
-        val quote = data?.let {
-            val pickup = business?.let { b -> if (b.lat != null && b.lon != null) LatLon(b.lat!!, b.lon!!) else null }
+        val pickup = business?.let { b -> if (b.lat != null && b.lon != null) LatLon(b.lat!!, b.lon!!) else null }
+        val shop = data?.let(ShopSettings::from)
+        val quote = shop?.let {
             Pricing.quote(
                 CartPricing.request(
                     cart.copy(fulfilment = fulfilment),
-                    ShopSettings.from(it),
+                    it,
                     nowEpochMs = now,
                     fleets = fleet?.let(Fleets::from),
                     pickup = pickup,
                 ),
             )
         }
-        return CartQuote(cart, fulfilment, options, quote)
+        return CartQuote(cart, fulfilment, options, quote, workflow, fleet, pickup, shop)
     }
 }

@@ -8,6 +8,7 @@ import app.hahn.tukplus.core.data.Prefetcher
 import app.hahn.tukplus.core.data.CartQuotes
 import app.hahn.tukplus.core.data.CartStore
 import app.hahn.tukplus.core.data.RecentShops
+import app.hahn.tukplus.core.data.WebCheckout
 import app.hahn.tukplus.core.data.ResourceStore
 import app.hahn.tukplus.core.data.SearchRepository
 import app.hahn.tukplus.core.data.ShopRepository
@@ -116,6 +117,11 @@ object AppModule {
     @Provides
     @Singleton
     fun cartQuotes(store: CartStore, shops: ShopRepository, @AppScope scope: CoroutineScope, clock: Clock) = CartQuotes(store, shops, scope, clock)
+
+    @Provides
+    @Singleton
+    fun webCheckout(@ApplicationContext context: Context, store: CartStore, @AppScope scope: CoroutineScope, redactor: Redactor, log: TukLog) =
+        WebCheckout(File(context.filesDir, "web_checkout"), store, scope, redactor, log)
 
     @Provides
     @Singleton

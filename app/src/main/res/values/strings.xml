@@ -168,4 +168,17 @@
     <string name="cart_checkout">Checkout · %1$s</string>
     <string name="cart_checkout_later">Checkout comes in a later version of Tuk plus.</string>
     <string name="cart_shop_closed">The shop is closed now.</string>
+
+    <!-- Web checkout fallback -->
+    <string name="cart_web_checkout">Finish on Tuk website</string>
+    <string name="web_checkout_title">Tuk website</string>
+    <string name="web_checkout_subtitle">Your cart is in the basket. Finish the order here.</string>
+    <string name="web_checkout_no_cart">Your cart is empty.</string>
+    <string name="web_checkout_unsupported">The Android System WebView on this phone is too old for the Tuk website checkout. Update it in the Play Store.</string>
+    <string name="web_checkout_leave_title">Leave the Tuk website?</string>
+    <string name="web_checkout_leave_text">If you did not place the order, your cart stays in Tuk plus.</string>
+    <string name="web_checkout_leave">Leave</string>
+    <string name="web_checkout_stay">Stay</string>
+    <string name="web_checkout_gone">The Tuk website stopped. Close this page and try again. If you placed the order, check it on tukapp.co before you order again.</string>
+    <string name="web_checkout_placed">Order placed on the Tuk website.</string>
 </resources>

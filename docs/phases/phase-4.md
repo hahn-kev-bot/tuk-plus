@@ -1,6 +1,32 @@
 # Phase 4 – Checkout
 
-Status: **not started**.
+Status: **in progress**: the web checkout fallback is built first (owner request, 2026-10-01).
+The own checkout is not started.
+
+## Progress
+
+- Done: "Finish on Tuk website" in the cart. It opens `https://tukapp.co/shop/<businessId>`
+  in a WebView (`ui/webcheckout`). The document-start script `app/src/main/assets/web_checkout.js`
+  (origin `https://tukapp.co` only) merges `basket`, `language` and `region` into
+  `localStorage.store` one time per hand-off (token in `localStorage.tukplus_handoff`), and
+  copies the web app's `POST transactions` request and response to the app (XHR and fetch).
+  It does not change or stop any request.
+- Done: `core:data` `WebCheckout` saves a snapshot per hand-off (`files/web_checkout/<token>.json`:
+  cart, workflow data, fleets, shop location, then the captured request and response).
+- Done: background order check `core:pricing` `OrderCheck`: our price code runs on the web
+  order's own basket, address, fare distance, payment method and time, and each amount field
+  is compared. Basket differences are reported too. Log: `web_checkout check` with
+  `result=match` or the differences. Test: all 645 parity orders without a user remit match.
+- Done: after the order is sent and the web app shows `/orders…`, the app clears the cart and
+  goes to the Orders tab.
+- Tested on 2026-10-01 in headless Chromium on the live site (every write call blocked, the
+  order request answered by the test): the basket shows "Checkout 2 Items ฿500", a reload does
+  not inject again, the capture gets the request and the response.
+- Not yet: login hand-off (phase 3). Until then, the user logs in inside the WebView once; the
+  WebView keeps that login. Lines with options and quantity n are sent as n lines (the web
+  app uses quantity 1 for them).
+- Not yet: the check does not know the user's own remit (`user.delivery_options`), so it can
+  show a fare difference for users who have one.
 
 ## Goal
 

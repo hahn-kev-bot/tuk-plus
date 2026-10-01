@@ -2,6 +2,7 @@ package app.hahn.tukplus
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -53,6 +54,7 @@ import app.hahn.tukplus.ui.home.HomeScreen
 import app.hahn.tukplus.ui.search.SearchScreen
 import app.hahn.tukplus.ui.shop.ShopScreen
 import app.hahn.tukplus.ui.theme.TukIcons
+import app.hahn.tukplus.ui.webcheckout.WebCheckoutScreen
 import app.hahn.tukplus.ui.theme.TukPlusTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -127,7 +129,20 @@ class MainActivity : ComponentActivity() {
                             ShopScreen(onBack = { nav.popBackStack() }, onOpenCart = { nav.navigate(Routes.CART) })
                         }
                         composable(Routes.CART) {
-                            CartScreen(onBack = { nav.popBackStack() }, onOpenShop = { id -> openShopFromCart(nav, id) })
+                            CartScreen(
+                                onBack = { nav.popBackStack() },
+                                onOpenShop = { id -> openShopFromCart(nav, id) },
+                                onWebCheckout = { nav.navigate(Routes.WEB_CHECKOUT) },
+                            )
+                        }
+                        composable(Routes.WEB_CHECKOUT) {
+                            WebCheckoutScreen(
+                                onClose = { nav.popBackStack() },
+                                onPlaced = {
+                                    Toast.makeText(this@MainActivity, R.string.web_checkout_placed, Toast.LENGTH_LONG).show()
+                                    goToTab(nav, Routes.ORDERS)
+                                },
+                            )
                         }
                         composable(Routes.ORDERS) { OrdersScreen() }
                         composable(Routes.ACCOUNT) { AccountScreen(onOpenDebug = { nav.navigate(Routes.DEBUG) }) }

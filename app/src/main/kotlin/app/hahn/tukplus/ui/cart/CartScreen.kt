@@ -64,7 +64,7 @@ import app.hahn.tukplus.ui.theme.TukIcons
  * note and the amounts. Checkout comes in phase 4.
  */
 @Composable
-fun CartScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, viewModel: CartViewModel = hiltViewModel()) {
+fun CartScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, onWebCheckout: () -> Unit, viewModel: CartViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
     val cart = state.cart
@@ -167,6 +167,13 @@ fun CartScreen(onBack: () -> Unit, onOpenShop: (String) -> Unit, viewModel: Cart
                     shape = RoundedCornerShape(28.dp),
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                 ) { Text(stringResource(R.string.cart_checkout, baht(total)), style = MaterialTheme.typography.labelLarge) }
+                // The fallback (PLAN.md §8a): the Tuk web app finishes the order with this cart.
+                OutlinedButton(
+                    onClick = onWebCheckout,
+                    enabled = blocked.isEmpty(),
+                    shape = RoundedCornerShape(28.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(48.dp),
+                ) { Text(stringResource(R.string.cart_web_checkout), style = MaterialTheme.typography.labelLarge) }
             }
         }
     }

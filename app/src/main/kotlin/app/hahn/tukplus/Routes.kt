@@ -16,6 +16,7 @@ object Routes {
     const val ACCOUNT = "account"
     const val DEBUG = "debug"
     const val CART = "cart"
+    const val WEB_CHECKOUT = "web_checkout"
 
     /** Routes with the bottom navigation bar. */
     val TOP_LEVEL = setOf(HOME, EAT, ORDERS, ACCOUNT)
