@@ -62,6 +62,11 @@ class WebCheckoutViewModel @Inject constructor(
         }
     }
 
+    /** The WebView size in pixels, to compare with the page sizes in the `layout` log lines. */
+    fun onViewSize(width: Int, height: Int, density: Float) {
+        handoff?.let { web.onViewSize(it.token, width, height, density) }
+    }
+
     fun onRenderGone(crashed: Boolean) {
         handoff?.let { web.onRenderGone(it.token, crashed) }
     }

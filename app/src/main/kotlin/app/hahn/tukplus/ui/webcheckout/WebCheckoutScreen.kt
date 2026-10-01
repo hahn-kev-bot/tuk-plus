@@ -34,6 +34,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -56,6 +58,7 @@ private const val ORIGIN = "https://tukapp.co"
 @Composable
 fun WebCheckoutScreen(onClose: () -> Unit, onPlaced: () -> Unit, viewModel: WebCheckoutViewModel = hiltViewModel()) {
     val placed by viewModel.placed.collectAsStateWithLifecycle()
+    val density = LocalDensity.current
     var progress by remember { mutableIntStateOf(0) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var askLeave by remember { mutableStateOf(false) }
@@ -90,7 +93,7 @@ fun WebCheckoutScreen(onClose: () -> Unit, onPlaced: () -> Unit, viewModel: WebC
             else -> AndroidView(
                 // Only the space below the title row. With fillMaxSize the page was taller than the
                 // screen, and the web app's fixed "Checkout" bar at the bottom was off screen.
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier.fillMaxWidth().weight(1f).onSizeChanged { viewModel.onViewSize(it.width, it.height, density.density) },
                 factory = { context ->
                     WebView(context).apply {
                         settings.javaScriptEnabled = true

@@ -26,6 +26,59 @@
     post({ type: 'inject_error', error: String(e) });
   }
 
+  // The web app sizes its page with the CSS variable --vh (1% of documentElement.clientHeight).
+  // Its "Checkout" bar is at the bottom of that page height. In the Android WebView the bar was
+  // not visible, so we keep --vh equal to 1% of the visible height (window.innerHeight) with a
+  // style rule that the web app's own inline value cannot override. We log the sizes too.
+  var vhStyle = null;
+  function fixHeight() {
+    try {
+      var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+      if (!h) return;
+      if (!vhStyle) {
+        vhStyle = document.createElement('style');
+        vhStyle.id = 'tukplus-vh';
+        (document.head || document.documentElement).appendChild(vhStyle);
+      }
+      var css = 'html{--vh:' + (h / 100) + 'px !important}';
+      if (vhStyle.textContent !== css) vhStyle.textContent = css;
+    } catch (e) { /* ignore */ }
+  }
+  function layout(reason) {
+    try {
+      var bar = document.querySelector('.bottom-checkout-wrapper');
+      var r = bar ? bar.getBoundingClientRect() : null;
+      var app = document.getElementById('app');
+      post({
+        type: 'layout', reason: reason, path: location.pathname,
+        inner: [window.innerWidth, window.innerHeight],
+        client: document.documentElement.clientHeight,
+        visual: window.visualViewport ? Math.round(window.visualViewport.height) : null,
+        vh: getComputedStyle(document.documentElement).getPropertyValue('--vh'),
+        app: app ? Math.round(app.getBoundingClientRect().height) : null,
+        dpr: window.devicePixelRatio,
+        bar: r ? [Math.round(r.top), Math.round(r.bottom), Math.round(r.height)] : null
+      });
+    } catch (e) { /* ignore */ }
+  }
+  var resizeTimer = null;
+  function onResize() {
+    fixHeight();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { layout('resize'); }, 500);
+  }
+  window.addEventListener('resize', onResize);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
+  document.addEventListener('DOMContentLoaded', function () {
+    fixHeight();
+    setTimeout(function () { layout('load+3s'); }, 3000);
+    setTimeout(function () { layout('load+10s'); }, 10000);
+  });
+  var clicks = 0;
+  document.addEventListener('click', function () {
+    if (clicks++ < 10) setTimeout(function () { layout('click'); }, 800);
+  }, true);
+
   function isOrder(method, url) {
     return /^post$/i.test(method || '') && /\/transactions\/?(\?|$)/.test(String(url || ''));
   }

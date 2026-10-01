@@ -106,6 +106,7 @@ class WebCheckout(
         when (type) {
             "injected" -> log.i("web_checkout", "injected", "token" to token.take(8), "keys" to message["keys"]?.toString())
             "inject_skipped" -> log.i("web_checkout", "inject_skipped", "token" to token.take(8))
+            "layout" -> log.i("web_checkout", "layout", "token" to token.take(8), "values" to message.filterKeys { it != "type" }.toString())
             "transaction_sent" -> log.i("web_checkout", "order_sent", "token" to token.take(8), "req" to message.string("request")?.let { redactor.redactBody(it, MAX_BODY) })
             "transaction" -> onTransaction(token, message, now)
             else -> log.w("web_checkout", "message", "token" to token.take(8), "text" to text.take(300))
@@ -116,6 +117,10 @@ class WebCheckout(
     fun onOrderPlaced(token: String) {
         log.i("web_checkout", "order_placed", "token" to token.take(8))
         cartStore.clear()
+    }
+
+    fun onViewSize(token: String, width: Int, height: Int, density: Float) {
+        log.i("web_checkout", "view_size", "token" to token.take(8), "px" to "${width}x$height", "dp" to "${(width / density).toInt()}x${(height / density).toInt()}")
     }
 
     fun onRenderGone(token: String, crashed: Boolean) {
