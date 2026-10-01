@@ -26,10 +26,12 @@
     post({ type: 'inject_error', error: String(e) });
   }
 
-  // The web app sizes its page with the CSS variable --vh (1% of documentElement.clientHeight).
-  // Its "Checkout" bar is at the bottom of that page height. In the Android WebView the bar was
-  // not visible, so we keep --vh equal to 1% of the visible height (window.innerHeight) with a
-  // style rule that the web app's own inline value cannot override. We log the sizes too.
+  // The web app's "Checkout" bar is position:absolute, bottom:0 inside #app. #app has
+  // height: -webkit-fill-available. Chrome makes that the screen height, but the Android WebView
+  // makes it 0 (owner's log 2026-10-01: app=0, bar=[-66,0,66]), so the bar was above the screen.
+  // We give #app the visible height, and keep the web app's --vh (1% of the height) equal to
+  // 1% of the visible height. The style rule uses !important, so the web app's own values
+  // cannot override it. We log the sizes too.
   var vhStyle = null;
   function fixHeight() {
     try {
@@ -40,7 +42,8 @@
         vhStyle.id = 'tukplus-vh';
         (document.head || document.documentElement).appendChild(vhStyle);
       }
-      var css = 'html{--vh:' + (h / 100) + 'px !important}';
+      var css = 'html{--vh:' + (h / 100) + 'px !important}' +
+        '#app{height:' + h + 'px !important;min-height:' + h + 'px !important;max-height:' + h + 'px !important}';
       if (vhStyle.textContent !== css) vhStyle.textContent = css;
     } catch (e) { /* ignore */ }
   }

@@ -22,6 +22,11 @@ The own checkout is not started.
 - Tested on 2026-10-01 in headless Chromium on the live site (every write call blocked, the
   order request answered by the test): the basket shows "Checkout 2 Items ฿500", a reload does
   not inject again, the capture gets the request and the response.
+- Fixed 2026-10-01 (owner's log): in the Android WebView the web app's `#app` is 0 px high
+  (`height: -webkit-fill-available` gives 0 there), and its "Checkout" bar is
+  `position:absolute; bottom:0` inside `#app`, so the bar was above the screen. The script gives
+  `#app` the visible height and keeps `--vh` equal to 1% of it. `web_checkout layout` log lines
+  show the sizes and the bar position.
 - Not yet: login hand-off (phase 3). Until then, the user logs in inside the WebView once; the
   WebView keeps that login. Lines with options and quantity n are sent as n lines (the web
   app uses quantity 1 for them).
